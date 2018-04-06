@@ -6,7 +6,7 @@ setup(name='climate',
 
       version='1.0',
 
-      description='An package for Physics 201 term project',
+      description='A package for Physics 201 term project on climate',
 
       url='http://github.com/phys201/climate',
 
