@@ -1,4 +1,4 @@
-from example.inference.prior import LogUniformPrior, LogJefferysPrior, LogNormalPrior
+from climate.inference.prior import LogUniformPrior, LogJefferysPrior, LogNormalPrior
 
 
 
