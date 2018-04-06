@@ -1,4 +1,4 @@
-# climate-model
+# climate
 
 Input greenhouse gas concentration
 
