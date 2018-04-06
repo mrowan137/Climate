@@ -1,1 +1,1 @@
-from .text import joke
+from .test1 import func1
