@@ -1,0 +1,8 @@
+from unittest import TestCase
+from climate.io import get_example_data_file_path, load_data
+import pandas as  pd
+
+class TestIo(TestCase):
+    def test_data_io(self):
+        data = load_data(get_example_data_file_path('global_surface_temp.txt'))
+        assert data.x[0] == 1
