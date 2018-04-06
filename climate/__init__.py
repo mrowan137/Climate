@@ -6,5 +6,5 @@ Created on Fri Apr  6 15:36:48 2018
 """
 
 def joke():
-    return (u'Wenn ist das Nunst\u00fcck git und Slotermeyer? Ja! ... '
-            u'Beiherhund das Oder die Flipperwaldt gersput.')
+    return (u'something'
+            u'something else.')
