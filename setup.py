@@ -18,4 +18,9 @@ setup(name='climate',
 
       packages=['climate'],
 
-      install_requires=['numpy'])
+      install_requires=['numpy'],
+      
+      test_suite='nose.collector',
+      
+      tests_require=['nose'],
+)
