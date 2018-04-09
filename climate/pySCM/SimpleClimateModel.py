@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-from data_io import *
+from climate.data_io import *
 
 '''
 Set the constants that are used for running the simple climate model at the beginning of the class.
