@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
+from data_io import *
+
 '''
 Set the constants that are used for running the simple climate model at the beginning of the class.
 (1) Carbon dioxide (CO2), methane (CH4), and nitrous oxide (N2O) concentrations at their pre-industrial level (e.g. 1750 values).
@@ -79,7 +81,8 @@ class SimpleClimateModel:
         # get start and end year of simulation
         self.startYr = int(self._GetParameter('Start year'))
         self.endYr = int(self._GetParameter('End year'))
-        self.emissions = self._ReadEmissions(self._GetParameter('File of emissions data'))
+        fileload = get_example_data_file_path('EmissionsForSCM.dat', data_dir='pySCM')
+        self.emissions = self._ReadEmissions(self._GetParameter(fileload))
     
     def runModel(self, RadForcingFlag = False):
         ''' 
@@ -204,7 +207,8 @@ class SimpleClimateModel:
             returnval.append(EmissionRec())
     
         # read data
-        table =np.loadtxt(self._GetParameter('File of emissions data'), skiprows=3)
+        fileload = get_example_data_file_path('EmissionsForSCM.dat', data_dir='pySCM')
+        table =np.loadtxt(fileload, skiprows=3)
     
         for col in range(1,table.shape[1]):
             data = np.zeros((len(returnval)))
@@ -303,7 +307,7 @@ class SimpleClimateModel:
         change and sea level change, the user also needs to provide the filename for the figure files in the parameter file.
         '''
         try:
-            Filename = self._GetParameter('Filename for temperature change')
+            Filename = get_example_data_file_path('TempChange.dat', data_dir='trad_climate_model_output')
             if not Filename:
                 raise SCMError('You need to provide a filename in the Parameter set up file!') 
             # write values to file
@@ -314,7 +318,8 @@ class SimpleClimateModel:
             writer.close() 
             
             # Plot temperature change and save figure to file if required
-            PlotFile = self._GetParameter('Plot temperature change')
+            fileload = get_example_data_file_path('TempChangePlot.png', data_dir='trad_climate_model_output')
+            PlotFile = fileload
             if PlotFile:
                 x = np.arange(self.startYr,self.endYr+1)
                 fig = plt.figure(1)
@@ -330,8 +335,8 @@ class SimpleClimateModel:
                 plt.savefig(PlotFile)
                 plt.clf()
                 
-            
-            SeaLevelFilename = self._GetParameter('Filename for sea level change')
+            filesave = get_example_data_file_path('SeaLevelChange.dat', data_dir='trad_climate_model_output')
+            SeaLevelFilename = filesave
             if not SeaLevelFilename:
                 raise SCMError('You need to provide a filename in the Parameter set up file!') 
             # write values to file
