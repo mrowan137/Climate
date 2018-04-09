@@ -1,6 +1,6 @@
 import numpy as np
-from data_io import *
-import pySCM.SimpleClimateModel as SCM
+from climate.data_io import *
+from climate.pySCM.SimpleClimateModel import *
 
 
 """
@@ -9,5 +9,5 @@ Traditional climate model
 
 def trad_climate_model():
     fileload = get_example_data_file_path('SimpleClimateModelParameterFile.txt', data_dir='pySCM')
-    model = SCM.SimpleClimateModel(fileload)
+    model = SimpleClimateModel(fileload)
     model.runModel()
