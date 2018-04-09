@@ -1,0 +1,18 @@
+Metadata-Version: 1.1
+Name: pySCM
+Version: 0.1.2
+Summary: A basic simple climate model in Python.
+Home-page: http://pythonhosted.org//pySCM
+Author: Jared Lewis
+Author-email: jared@bodekerscientific.com
+License: BSD
+Description: pySCM is a simple climate model developed in Python.
+        
+        Documentation is available from http://pythonhosted.org//pySCM
+        
+Keywords: simple climate model SCM climate science
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Topic :: Scientific/Engineering
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Intended Audience :: Science/Research

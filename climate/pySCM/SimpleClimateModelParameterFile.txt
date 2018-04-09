@@ -1,0 +1,28 @@
+# Start year and end year of simulation
+Start year=1750
+End year=2100
+
+# Provide the path and file name of the GHG emissions
+File of emissions data=W:/Python/PyUnits/SimpleClimateModel/pySCM/EmissionsForSCM.dat
+
+# Constants that can be adjusted.
+Ocean mixed layer depth [in meters]=75.0
+Years to evaluate response functions=800
+
+# Plot and save temperature change and sea level change
+# If you do not want to save the figure leave it blank
+Filename for temperature change=W:/Python/PyUnits/SimpleClimateModel/Output/TempChange.dat
+Plot temperature change=W:/Python/PyUnits/SimpleClimateModel/Output/TempChange.png
+Filename for sea level change=W:/Python/PyUnits/SimpleClimateModel/Output/SeaLevelChange.dat
+Plot sea level change=
+
+# Provide path and file names if you want to save the output (leave blank if you don't want to save the output)
+Write CO2 concentrations to file=W:/Python/PyUnits/SimpleClimateModel/Output/CO2Concs.dat
+Plot CO2 concentrations to file=W:/Python/PyUnits/SimpleClimateModel/Output/CO2Concs.png
+
+Write CH4 concentrations to file=
+Plot CH4 concentrations to file=
+
+Write N20 concentrations to file=
+Plot N2O concentrations to file=
+
