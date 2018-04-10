@@ -63,8 +63,8 @@ def log_prior_tcm(theta):
     # unpack the model parameters
     shift, CO2_norm, CH4_norm, N2O_norm, SOx_norm = theta
     
-    if (-10. < shift < 10. and 0.6 < CO2_norm < 1.4 and 0.6 < CH4_norm < 1.4
-        and 0.6 < N2O_norm < 1.4 and 0.6 < SOx_norm < 1.4):
+    if (-10. < shift < 10. and 0.4 < CO2_norm < 1.6 and 0.4 < CH4_norm < 1.6
+                           and 0.4 < N2O_norm < 1.6 and 0.4 < SOx_norm < 1.6):
         return 0.0
     return -np.inf
 
@@ -180,5 +180,5 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
     y_tcm_best = y_tcm_best.iloc[:].values[wh_tcm_best] + shift_best
     
     # plot the best-fit line, and data
-    plt.errorbar(x, y, y_err, label='data')
+    plt.errorbar(x, y, yerr, label='data')
     plt.plot(x_tcm_best, y_tcm_best, label='best fit params')
