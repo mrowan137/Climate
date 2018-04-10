@@ -9,7 +9,7 @@ from climate.pySCM.SimpleClimateModel import *
 Traditional climate model
 """
 
-def log_lh_tcm(theta, x, y, yerr):
+def log_lh_scm(theta, x, y, yerr):
     """Returns log of likelihood function
 
     Args:
@@ -28,30 +28,30 @@ def log_lh_tcm(theta, x, y, yerr):
     """
     shift, CO2_norm, CH4_norm, N2O_norm, SOx_norm = theta
     
-    # run simple climate model and save output
+    # Run simple climate model and save output
     fileload = get_example_data_file_path(
         'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
     model = SimpleClimateModel(fileload, [shift, CO2_norm, CH4_norm, N2O_norm, SOx_norm])
     model.runModel()
 
-    # read in temperature change output (from simple climate model)
+    # Read in temperature change output (from simple climate model)
     fileload = get_example_data_file_path(
         'TempChange.dat', data_dir='trad_climate_model_output')
-    data_tcm = load_tcm_temp(fileload)
-    x_tcm, y_tcm = data_tcm.year, data_tcm.temp
+    data_scm = load_scm_temp(fileload)
+    x_scm, y_scm = data_scm.year, data_scm.temp
 
-    # select years from data and tcm to compare
-    wh_tcm = np.where((x_tcm >= np.min(x)) & (x_tcm <= np.max(x)))
-    x_tcm = x_tcm.iloc[:].values[wh_tcm]
-    y_tcm = y_tcm.iloc[:].values[wh_tcm] + shift
+    # Select years from data and scm to compare
+    wh_scm = np.where((x_scm >= np.min(x)) & (x_scm <= np.max(x)))
+    x_scm = x_scm.iloc[:].values[wh_scm]
+    y_scm = y_scm.iloc[:].values[wh_scm] + shift
     
-    # compute chisq and return
-    chisq = np.sum(((y - y_tcm)/yerr)**2)
+    # Compute chisq and return
+    chisq = np.sum(((y - y_scm)/yerr)**2)
     constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*yerr**2)))
     return constant - 0.5*chisq
     
 
-def log_prior_tcm(theta):
+def log_prior_scm(theta):
     """Returns log of prior probability distribution
 
     Args:
@@ -60,7 +60,7 @@ def log_prior_tcm(theta):
     Returns:
         0. if within prior range, -inf if not
     """
-    # unpack the model parameters
+    # Unpack the model parameters
     shift, CO2_norm, CH4_norm, N2O_norm, SOx_norm = theta
     
     if (-5. < shift < 5. and 0.7 < CO2_norm < 1.3 and 0.7 < CH4_norm < 1.3
@@ -69,7 +69,7 @@ def log_prior_tcm(theta):
     return -np.inf
 
 
-def log_post_tcm(theta, x, y, yerr):
+def log_post_scm(theta, x, y, yerr):
     """Returns log of posterior probability distribution for traditional climate model
 
     Args:
@@ -81,7 +81,7 @@ def log_post_tcm(theta, x, y, yerr):
     Returns:
         Log of posterior distribution
     """
-    return log_prior_tcm(theta) + log_lh_tcm(theta, x, y, yerr)
+    return log_prior_scm(theta) + log_lh_scm(theta, x, y, yerr)
 
 
 def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
@@ -109,39 +109,40 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
         theta_guess + 1e-4 * np.random.randn(ndim) for i in range(nwalkers)
     ]
     
-    # set up the sampler object
+    # Set up the sampler object
     sampler = emcee.EnsembleSampler(
         nwalkers, ndim, log_post, args=(x, y, yerr))
     
-    # run the sampler
+    # Run the sampler
     sampler.run_mcmc(starting_positions, nsteps)
     
-    # plot and check for burn in time
-    fig, (ax_shift, ax_CO2, ax_CH4, ax_N2O, ax_SOx) = plt.subplots(5)
+    # Plot and check for burn in time
+    fig, (ax_shift, ax_CO2, ax_CH4, ax_N2O, ax_SOx) = plt.subplots(5, figsize=(10,10))
+    plt.subplots_adjust(hspace=0.5)
     ax_shift.set(ylabel='$T_{\\rm shift}$')
     ax_CO2.set(ylabel='CO2 norm')
     ax_CH4.set(ylabel='CH4 norm')
     ax_N2O.set(ylabel='N2O norm')
     ax_SOx.set(ylabel='SOx norm')
-    for i in range(10):
-        sns.tsplot(sampler.chain[i, :, 0], ax=ax_shift)
-        sns.tsplot(sampler.chain[i, :, 1], ax=ax_CO2)
-        sns.tsplot(sampler.chain[i, :, 2], ax=ax_CH4)
-        sns.tsplot(sampler.chain[i, :, 3], ax=ax_N2O)
-        sns.tsplot(sampler.chain[i, :, 4], ax=ax_SOx)
+    
+    sns.distplot(sampler.flatchain[ :, 0], ax=ax_shift)
+    sns.distplot(sampler.flatchain[:, 1], ax=ax_CO2)
+    sns.distplot(sampler.flatchain[:, 2], ax=ax_CH4)
+    sns.distplot(sampler.flatchain[:, 3], ax=ax_N2O)
+    sns.distplot(sampler.flatchain[:, 4], ax=ax_SOx)
 
-    # trime the samples and reshape
+    # Trim the samples and reshape
     samples = sampler.chain[:, burnin:, :]
     traces = samples.reshape(-1, ndim).T
 
-    # store the samples in a dataframe
+    # Store the samples in a dataframe
     parameter_samples = pd.DataFrame({'shift': traces[0],
                                       'CO2_norm': traces[1],
                                       'CH4_norm': traces[2],
                                       'N2O_norm': traces[3],
                                       'SOx_norm': traces[4]})
 
-    # compute and print the MAP values
+    # Compute and print the MAP values
     q = parameter_samples.quantile([0.16, 0.50, 0.84], axis=0)
     print("shift = {:.6f} + {:.6f} - {:.6f}".format(
     q['shift'][0.50], q['shift'][0.84] - q['shift'][0.50], q['shift'][0.50] - q['shift'][0.16]))
@@ -154,35 +155,37 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
     print("SOx_norm = {:.6f} + {:.6f} - {:.6f}".format(
     q['SOx_norm'][0.50], q['SOx_norm'][0.84] - q['SOx_norm'][0.50], q['SOx_norm'][0.50] - q['SOx_norm'][0.16]))
 
-    # best-fit params
+    # Best-fit params
     shift_best = q['shift'][0.50]
     CO2_norm_best = q['CO2_norm'][0.50]
     CH4_norm_best = q['CH4_norm'][0.50]
     N2O_norm_best = q['N2O_norm'][0.50]
     SOx_norm_best = q['SOx_norm'][0.50]
 
-    # run simple climate model with best fit params
+    # Run simple climate model with best fit params
     fileload = get_example_data_file_path(
         'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
     model_best = SimpleClimateModel(
         fileload, [shift_best, CO2_norm_best, CH4_norm_best, N2O_norm_best, SOx_norm_best])
     model_best.runModel()
     
-    # read in temperature change output (from simple climate model)
+    # Read in temperature change output (from simple climate model)
     fileload = get_example_data_file_path(
         'TempChange.dat', data_dir='trad_climate_model_output')
-    data_tcm_best = load_tcm_temp(fileload)
-    x_tcm_best, y_tcm_best = data_tcm_best.year, data_tcm_best.temp
+    data_scm_best = load_scm_temp(fileload)
+    x_scm_best, y_scm_best = data_scm_best.year, data_scm_best.temp
 
-    # select years from data and tcm to compare
-    wh_tcm_best = np.where((x_tcm_best >= np.min(x)) & (x_tcm_best <= np.max(x)))
-    x_tcm_best = x_tcm_best.iloc[:].values[wh_tcm_best]
-    y_tcm_best = y_tcm_best.iloc[:].values[wh_tcm_best] + shift_best
+    # Select years from data and tcm to compare
+    wh_scm_best = np.where((x_scm_best >= np.min(x)) & (x_scm_best <= np.max(x)))
+    x_scm_best = x_scm_best.iloc[:].values[wh_scm_best]
+    y_scm_best = y_scm_best.iloc[:].values[wh_scm_best] + shift_best
     
-    # plot the best-fit line, and data
-    plt.errorbar(x, y, yerr, label='data')
-    plt.plot(x_tcm_best, y_tcm_best, label='best fit')
-    plt.xlabel('year')
+    # Plot the best-fit line, and data
+    plt.figure(figsize=(10,8))
+    plt.errorbar(x, y, yerr,  linestyle='none')
+    plt.scatter(x, y, c='k',zorder=5,s=20, label='data')
+    plt.plot(x_scm_best, y_scm_best, label='best fit')
+    plt.xlabel('Year')
     plt.ylabel('$\Delta T$ ($^{\circ}$C)')
-    plt.title('Global surface temperature anomaly; data vs. fit');
+    plt.title('Global Surface Temperature Anomaly');
     plt.legend()

@@ -33,8 +33,8 @@ def load_data_temp(data_file):
     return data
 
 
-def load_tcm_temp(data_file):
-    """Import temperature output by traditional climate model from data_file.
+def load_scm_temp(data_file):
+    """Import temperature output by simple climate model from data_file.
 
     Args:
         data_file (str): Location of data to be imported.
