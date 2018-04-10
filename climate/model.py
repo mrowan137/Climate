@@ -103,7 +103,8 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
                    diagnosing this
 
        Returns:
-           Nothing
+           Samples (array): trajectories of the walkers through parameter spaces.
+                            This array has dimension (nwalkers) x (nsteps - burnin) x (ndim)
     """    
     starting_positions = [
         theta_guess + 1e-4 * np.random.randn(ndim) for i in range(nwalkers)
@@ -131,7 +132,7 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
     sns.distplot(sampler.flatchain[:, 3], ax=ax_N2O)
     sns.distplot(sampler.flatchain[:, 4], ax=ax_SOx)
 
-    # Trim the samples and reshape
+    # Trim the samples according to burn-in time and reshape
     samples = sampler.chain[:, burnin:, :]
     traces = samples.reshape(-1, ndim).T
 
@@ -189,3 +190,5 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
     plt.ylabel('$\Delta T$ ($^{\circ}$C)')
     plt.title('Global Surface Temperature Anomaly');
     plt.legend()
+
+    return samples
