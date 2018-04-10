@@ -71,18 +71,26 @@ class SimpleClimateModel:
         The file containing the emissions should be in a certain format.
         Please refer to the example file (*EmissionsForSCM.dat*) for details.
     '''
-    def __init__(self, Filename):
+    def __init__(self, Filename, theta):
         '''
         This is the constructor of the class. By calling the constructor, the emissions will be read from file 
         (filling the EmissionRec) and the parameters will be read from the parameter file.
         :param Filename: path and filename of the parameter file.
-        '''    
+        '''
+        # get emissions normalizations
+        self.CO2_norm = theta[1]
+        self.CH4_norm = theta[2]
+        self.N2O_norm = theta[3]
+        self.SOx_norm = theta[4]
+        
         self._ReadParameters(Filename)
         # get start and end year of simulation
         self.startYr = int(self._GetParameter('Start year'))
         self.endYr = int(self._GetParameter('End year'))
         fileload = get_example_data_file_path('EmissionsForSCM.dat', data_dir='pySCM')
         self.emissions = self._ReadEmissions(self._GetParameter(fileload))
+
+
     
     def runModel(self, RadForcingFlag = False):
         ''' 
@@ -231,16 +239,18 @@ class SimpleClimateModel:
     
             interpolVal = np.interp(x, xp, fp)
 
+            # Adjust emissions by normalization
             for index in range(len(interpolVal)):
                 if col == 1:
-                    returnval[index].CO2 = interpolVal[index]
+                    returnval[index].CO2 = interpolVal[index]*self.CO2_norm
                 elif col == 2:
-                    returnval[index].CH4 = interpolVal[index]
+                    returnval[index].CH4 = interpolVal[index]*self.CH4_norm
                 elif col == 3:
-                    returnval[index].N2O = interpolVal[index]
+                    returnval[index].N2O = interpolVal[index]*self.N2O_norm
                 elif col == 4:
-                    returnval[index].SOx = interpolVal[index]
-    
+                    returnval[index].SOx = interpolVal[index]*self.SOx_norm
+
+            
         return returnval
     
     #---------------------------------------------------------
