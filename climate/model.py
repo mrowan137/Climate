@@ -13,18 +13,18 @@ def log_lh_scm(theta, x, y, yerr):
     """Returns log of likelihood function
 
     Args:
-        x (array): independent variable, years
-        y (array): dependent variable, temperature anomaly
-        yerr (array): uncertainty on temperature
-        theta (array): parameters for the traditional (simple) climate model
-            -shift: overall shift of the temperature curve output by SCM
-            -CO2_norm: normalization for CO2 emissions
+        x (array): Independent variable, years
+        y (array): Dependent variable, temperature anomaly
+        yerr (array): Uncertainty on temperature
+        theta (array): Parameters for the traditional (simple) climate model
+            -shift: Overall shift of the temperature curve output by SCM
+            -CO2_norm: Normalization for CO2 emissions
             -CH4_norm:       "        "  CH4     "
             -N2O_norm:       "        "  N2O     " 
             -SOx_norm:       "        "  SOx     "
 
     Returns:
-        chisq: sum of ((y_data - y_model)/y_err)**2 
+        chisq: Sum of ((y_data - y_model)/y_err)**2 
     """
     shift, CO2_norm, CH4_norm, N2O_norm, SOx_norm = theta
     
@@ -55,7 +55,7 @@ def log_prior_scm(theta):
     """Returns log of prior probability distribution
 
     Args:
-        theta (array): model parameters
+        theta (array): Model parameters
 
     Returns:
         0. if within prior range, -inf if not
@@ -73,10 +73,10 @@ def log_post_scm(theta, x, y, yerr):
     """Returns log of posterior probability distribution for traditional climate model
 
     Args:
-        theta (array): parameters for the traditional (simple) climate model
-        x (array): independent variable, years
-        y (array): dependent variable, temperature anomaly
-        yerr (array): uncertainty on temperature
+        theta (array): Parameters for the traditional (simple) climate model
+        x (array): Independent variable, years
+        y (array): Dependent variable, temperature anomaly
+        yerr (array): Uncertainty on temperature
        
     Returns:
         Log of posterior distribution
@@ -84,27 +84,26 @@ def log_post_scm(theta, x, y, yerr):
     return log_prior_scm(theta) + log_lh_scm(theta, x, y, yerr)
 
 
-def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
+def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps):
     """Samples the posterior distribution via the affine-invariant ensemble 
        sampling algorithm; plots are output to diagnose burn-in time; best-fit
        parameters are printed; best-fit line is overplotted on data, with errors.
     
        Args:
-           log_post (function): log of posterior distribution
-           x (array): independent variable, years
-           y (array): dependent variable, temperature anomaly
-           yerr (array): uncertainty on temperature
-           theta_guess (array): initial guess for parameters
-           ndim (int): dimension of the parameter space space to sample
-           nwalkers (int): number of walkers for affine-invariant ensemble sampling;
+           log_post (function): Log of posterior distribution
+           x (array): Independent variable, years
+           y (array): Dependent variable, temperature anomaly
+           yerr (array): Uncertainty on temperature
+           theta_guess (array): Initial guess for parameters
+           ndim (int): Dimension of the parameter space space to sample
+           nwalkers (int): Number of walkers for affine-invariant ensemble sampling;
                            must be an even number
-           nsteps (int): number of timesteps for which to run the algorithm
-           burnin: burn in time to trim the samples; plots are output to aid in
-                   diagnosing this
+           nsteps (int): Number of timesteps for which to run the algorithm
+
 
        Returns:
-           Samples (array): trajectories of the walkers through parameter spaces.
-                            This array has dimension (nwalkers) x (nsteps - burnin) x (ndim)
+           Samples (array): Trajectories of the walkers through parameter spaces.
+                            This array has dimension (nwalkers) x (nsteps) x (ndim)
     """    
     starting_positions = [
         theta_guess + 1e-4 * np.random.randn(ndim) for i in range(nwalkers)
@@ -117,6 +116,31 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
     # Run the sampler
     sampler.run_mcmc(starting_positions, nsteps)
     
+    # return the samples and sampler.flatchain for later output
+    samples = sampler.chain[:, :, :]
+    sampler_flatchain = sampler.flatchain
+    return samples, sampler_flatchain
+
+
+def show_results(samples, sampler_flatchain, burnin, x, y, yerr):
+    """Displays results from sample()
+    
+       Args:
+           samples (array): Collection of walker trajectories, and is
+                            a result of sample()
+           sampler_flatchain (array): Flattened array of size (nwalkers*nsteps) x (ndim);
+                                      array is flattened along the walker axis
+           burnin (int): Burn in time to trim the samples; plots are output to 
+                         aid in diagnosing this
+           x (array): Independent variable, years
+           y (array): Dependent variable, temperature anomaly
+           yerr (array): Uncertainty on temperature
+       
+       Returns:
+           Samples (array): Trajectories of the walkers through parameter spaces.
+                            This array has dimension (nwalkers) x (nsteps) x (ndim)
+    """  
+   
     # Plot and check for burn in time
     fig, (ax_shift, ax_CO2, ax_CH4, ax_N2O, ax_SOx) = plt.subplots(5, figsize=(10,10))
     plt.subplots_adjust(hspace=0.5)
@@ -126,15 +150,12 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
     ax_N2O.set(ylabel='N2O norm')
     ax_SOx.set(ylabel='SOx norm')
     
-    sns.distplot(sampler.flatchain[ :, 0], ax=ax_shift)
-    sns.distplot(sampler.flatchain[:, 1], ax=ax_CO2)
-    sns.distplot(sampler.flatchain[:, 2], ax=ax_CH4)
-    sns.distplot(sampler.flatchain[:, 3], ax=ax_N2O)
-    sns.distplot(sampler.flatchain[:, 4], ax=ax_SOx)
-
-    # Trim the samples according to burn-in time and reshape
-    samples = sampler.chain[:, burnin:, :]
-    traces = samples.reshape(-1, ndim).T
+    sns.distplot(sampler_flatchain[:, 0], ax=ax_shift)
+    sns.distplot(sampler_flatchain[:, 1], ax=ax_CO2)
+    sns.distplot(sampler_flatchain[:, 2], ax=ax_CH4)
+    sns.distplot(sampler_flatchain[:, 3], ax=ax_N2O)
+    sns.distplot(sampler_flatchain[:, 4], ax=ax_SOx)
+    traces = samples.reshape(-1, samples.shape[-1]).T
 
     # Store the samples in a dataframe
     parameter_samples = pd.DataFrame({'shift': traces[0],
@@ -190,5 +211,3 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
     plt.ylabel('$\Delta T$ ($^{\circ}$C)')
     plt.title('Global Surface Temperature Anomaly');
     plt.legend()
-
-    return samples
