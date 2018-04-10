@@ -63,8 +63,8 @@ def log_prior_tcm(theta):
     # unpack the model parameters
     shift, CO2_norm, CH4_norm, N2O_norm, SOx_norm = theta
     
-    if (-10. < shift < 10. and 0.< CO2_norm < 2.0 and 0.< CH4_norm < 2.
-        and 0. < N2O_norm < 2. and 0. < SOx_norm < 2.):
+    if (-10. < shift < 10. and 0.6 < CO2_norm < 1.4 and 0.6 < CH4_norm < 1.4
+        and 0.6 < N2O_norm < 1.4 and 0.6 < SOx_norm < 1.4):
         return 0.0
     return -np.inf
 
