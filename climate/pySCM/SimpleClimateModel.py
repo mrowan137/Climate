@@ -307,12 +307,18 @@ class SimpleClimateModel:
         change and sea level change, the user also needs to provide the filename for the figure files in the parameter file.
         '''
         try:
-            Filename = get_example_data_file_path('TempChange.dat', data_dir='trad_climate_model_output')
+            Filename = get_example_data_file_path('TempChangeCommented.dat', data_dir='trad_climate_model_output')
             if not Filename:
                 raise SCMError('You need to provide a filename in the Parameter set up file!') 
-            # write values to file
+            # write values to file (including comment)
             writer = open(Filename, 'w')
             writer.write("This files contains change in temperature [degC] for the years the model has been run for."+'\n')
+            for i in range(len(self.temperatureChange)):
+                writer.write(str(self.startYr+i)+"    "+str(self.temperatureChange[i])+"\n")
+            writer.close()
+
+            # write values to file (no comment)
+            writer = open(Filename, 'w')
             for i in range(len(self.temperatureChange)):
                 writer.write(str(self.startYr+i)+"    "+str(self.temperatureChange[i])+"\n")
             writer.close() 
