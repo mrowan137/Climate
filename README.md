@@ -1,7 +1,13 @@
-# Climate modelling
+# Climate modeling
 
-Tentative description:
+This package investigates the role that cloud seeding may play in Earth's
+climate trends, and how such a model compares to traditional models that
+consider primarily the greenhouse gas (GHG) effect.
 
-Input greenhouse gas concentration
+For: Data Analysis (PHYS 201), Spring 2018, Harvard University.
+Authors: Brendon Bullard, Yu Li, and Michael Rowan
+License: GNU General Public License v3
 
-Output temperature
+This package uses the pySCM (Simple Climate Model) package.  For pySCM package:
+Author: Jared Lewis
+License: BSD
