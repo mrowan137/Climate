@@ -317,6 +317,9 @@ class SimpleClimateModel:
                 writer.write(str(self.startYr+i)+"    "+str(self.temperatureChange[i])+"\n")
             writer.close()
 
+            Filename = get_example_data_file_path('TempChange.dat', data_dir='trad_climate_model_output')
+            if not Filename:
+                raise SCMError('You need to provide a filename in the Parameter set up file!') 
             # write values to file (no comment)
             writer = open(Filename, 'w')
             for i in range(len(self.temperatureChange)):
