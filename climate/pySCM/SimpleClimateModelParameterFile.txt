@@ -1,7 +1,7 @@
 
 # Start year and end year of simulation
-Start year=1750
-End year=2100
+Start year=1850
+End year=2018
 
 # Provide the path and file name of the GHG emissions
 File of emissions data=W:/Python/PyUnits/SimpleClimateModel/pySCM/EmissionsForSCM.dat
