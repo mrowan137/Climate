@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-# following the example file
+# Following the example file
 
 
 def get_example_data_file_path(filename, data_dir='data'):
@@ -14,8 +14,8 @@ def get_example_data_file_path(filename, data_dir='data'):
     return os.path.join(data_dir, filename)
 
 
-def load_data(data_file):
-    """Import data from location data_file.
+def load_data_temp(data_file):
+    """Import temperature data from location data_file.
 
     Args:
         data_file (str): Location of data to be imported.
@@ -30,4 +30,19 @@ def load_data(data_file):
                     "five_year_anomaly", "five_year_anomaly_unc",
                     "ten_year_anomaly", "ten_year_anomaly_unc",
                     "twenty_year_anomaly", "twenty_year_anomaly_unc"]
+    return data
+
+
+def load_tcm_temp(data_file):
+    """Import temperature output by traditional climate model from data_file.
+
+    Args:
+        data_file (str): Location of data to be imported.
+
+    Returns:
+        data: Pandas data frame.
+
+    """
+    data = pd.read_csv(data_file, sep='\s+', header=None)
+    data.columns = ["year", "temp"]
     return data
