@@ -47,9 +47,9 @@ def log_lh_tcm(theta, x, y, yerr):
     
     # compute chisq and return
     chisq = np.sum(((y - y_tcm)/yerr)**2)
-
-    return chisq
-
+    constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*yerr**2)))
+    return constant - 0.5*chisq
+    
 
 def log_prior_tcm(theta):
     """Returns log of prior probability distribution
@@ -63,8 +63,8 @@ def log_prior_tcm(theta):
     # unpack the model parameters
     shift, CO2_norm, CH4_norm, N2O_norm, SOx_norm = theta
     
-    if (-10. < shift < 10. and 0.4 < CO2_norm < 1.6 and 0.4 < CH4_norm < 1.6
-                           and 0.4 < N2O_norm < 1.6 and 0.4 < SOx_norm < 1.6):
+    if (-5. < shift < 5. and 0.7 < CO2_norm < 1.3 and 0.7 < CH4_norm < 1.3
+                         and 0.7 < N2O_norm < 1.3 and 0.7 < SOx_norm < 1.3):
         return 0.0
     return -np.inf
 
@@ -181,4 +181,8 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps, burnin):
     
     # plot the best-fit line, and data
     plt.errorbar(x, y, yerr, label='data')
-    plt.plot(x_tcm_best, y_tcm_best, label='best fit params')
+    plt.plot(x_tcm_best, y_tcm_best, label='best fit')
+    plt.xlabel('year')
+    plt.ylabel('$\Delta T$ ($^{\circ}$C)')
+    plt.title('Global surface temperature anomaly; data vs. fit');
+    plt.legend()
