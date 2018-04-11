@@ -19,7 +19,8 @@ class TestModel(TestCase):
 
         # here we expect res to be -inf because the overall temperature shift
         # of 1e9 is outside our prior range
-        res = log_post_tcm([1e9, 0., 0., 0., 0.], x, y, yerr)
+        priorBounds = [[-0.5, 0.7, 0.7, 0.7, 0.7] , [0.5, 1.3, 1.3, 1.3, 1.3]]
+        res = log_post_scm([1e9, 0., 0., 0., 0.], priorBounds, x, y, yerr)
         assert res == -np.Inf
 
         
