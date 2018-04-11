@@ -51,25 +51,29 @@ def log_lh_scm(theta, x, y, yerr):
     return constant - 0.5*chisq
     
 
-def log_prior_scm(theta):
+def log_prior_scm(theta, bounds):
     """Returns log of prior probability distribution
 
     Args:
         theta (array): Model parameters
+	bounds (2Darray): Bounds of flat priors
 
     Returns:
-        0. if within prior range, -inf if not
+        log of normalized prior value if within prior range, -inf if not
     """
     # Unpack the model parameters
     shift, CO2_norm, CH4_norm, N2O_norm, SOx_norm = theta
     
-    if (-5. < shift < 5. and 0.7 < CO2_norm < 1.3 and 0.7 < CH4_norm < 1.3
-                         and 0.7 < N2O_norm < 1.3 and 0.7 < SOx_norm < 1.3):
-        return 0.0
+    # Convert bounds to numpy array
+    bounds = np.array(bounds)
+
+    if (bounds[0][0] < shift < bounds[1][0] and bounds[0][1] < CO2_norm < bounds[1][1] and bounds[0][2] < CH4_norm < bounds[1][2]
+                         and bounds[0][3] < N2O_norm < bounds[1][3] and bounds[0][4] < SOx_norm < bounds[1][4]):
+        return np.log(np.product(bounds[1]-bounds[0]))
     return -np.inf
 
 
-def log_post_scm(theta, x, y, yerr):
+def log_post_scm(theta, bounds, x, y, yerr):
     """Returns log of posterior probability distribution for traditional climate model
 
     Args:
@@ -77,14 +81,15 @@ def log_post_scm(theta, x, y, yerr):
         x (array): Independent variable, years
         y (array): Dependent variable, temperature anomaly
         yerr (array): Uncertainty on temperature
+	bounds (2Darray): Bounds on flat prior
        
     Returns:
         Log of posterior distribution
     """
-    return log_prior_scm(theta) + log_lh_scm(theta, x, y, yerr)
+    return log_prior_scm(theta, bounds) + log_lh_scm(theta, x, y, yerr)
 
 
-def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps):
+def sample(log_post, x, y, yerr, theta_guess, prior_bounds, ndim, nwalkers, nsteps):
     """Samples the posterior distribution via the affine-invariant ensemble 
        sampling algorithm; plots are output to diagnose burn-in time; best-fit
        parameters are printed; best-fit line is overplotted on data, with errors.
@@ -95,6 +100,7 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps):
            y (array): Dependent variable, temperature anomaly
            yerr (array): Uncertainty on temperature
            theta_guess (array): Initial guess for parameters
+	   prior_bounds (2Darray): Bounds for the flat prior 
            ndim (int): Dimension of the parameter space space to sample
            nwalkers (int): Number of walkers for affine-invariant ensemble sampling;
                            must be an even number
@@ -111,7 +117,7 @@ def sample(log_post, x, y, yerr, theta_guess, ndim, nwalkers, nsteps):
     
     # Set up the sampler object
     sampler = emcee.EnsembleSampler(
-        nwalkers, ndim, log_post, args=(x, y, yerr))
+        nwalkers, ndim, log_post, args=(prior_bounds, x, y, yerr))
     
     # Run the sampler
     sampler.run_mcmc(starting_positions, nsteps)
