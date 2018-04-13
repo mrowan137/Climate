@@ -1,22 +1,22 @@
 import numpy as np
 import emcee
 import seaborn as sns
+from scipy.interpolate import interp1d
 from climate.data_io import *
 from climate.pySCM.SimpleClimateModel import *
-import sys
-import prior
+from climate.inference import prior
 
 
 class Model:
-"""
-Base class for generic model
+    """
+    Base class for generic model
 
-Instantiator Args:
-    ndim: number of parameters for model
-    x (array): Independent variable data array
-    y (array): Dependent variable data array
-    yerr (array): Uncertainty on y data series
-"""
+    Instantiator Args:
+        ndim: number of parameters for model
+        x (array): Independent variable data array
+        y (array): Dependent variable data array
+        yerr (array): Uncertainty on y data series
+    """
 
     def __init__(self, ndim, x, y, yerr):
         """
@@ -36,7 +36,7 @@ Instantiator Args:
         self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
 
 
-    def set_priors(self, prior_type, param1, param2)
+    def set_priors(self, prior_type, param1, param2):
         """
         Setter for the priors on all model parameter
 
@@ -73,7 +73,7 @@ Instantiator Args:
         return np.sum(priors_eval)    
 
     
-    def log_post_scm(self, params):
+    def log_post(self, params):
         """
         Returns log of posterior probability distribution for traditional climate model
 
@@ -148,7 +148,7 @@ Instantiator Args:
         q = samples_df.quantile([0.16, 0.50, 0.84], axis=0)
         for i in range(self.ndim):
             print("Param {:.0f} = {:.6f} + {:.6f} - {:.6f}".format( i, 
-            q.['p'+str(i)][0.50], q.['p'+str(i)][0.84] - q['p'+str(i)][0.50], q['p'+str(i)][0.50] - q['p'+str(i)][0.16]))
+            q['p'+str(i)][0.50], q['p'+str(i)][0.84] - q['p'+str(i)][0.50], q['p'+str(i)][0.50] - q['p'+str(i)][0.16]))
 
         # Best-fit params
         self.params = [ q['p'+str(i)][0.50] for i in range(self.ndim) ]
@@ -182,14 +182,16 @@ Instantiator Args:
 
 
 class ModifiedSimpleClimateModel:
-"""
-Modified Simple Climate Model Class
-"""
+    """
+    Modified Simple Climate Model Class
+    """
     
     def __call__(self):
         """
         Evaluate the model using the best fit global parameters.
         Must be called after calls to run_MCMC and show_results.
+
+        Returns x and y series for model prediction
         """
 
         # Run simple climate model with best fit params
@@ -245,5 +247,77 @@ Modified Simple Climate Model Class
     
         # Compute chisq and return
         chisq = np.sum(((self.y - y_scm)/self.yerr)**2)
+        constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*self.yerr**2)))
+        return constant - 0.5*chisq
+
+
+class BasicCloudSeedingModel:
+    """
+    Basic model for cloud seeding. DT = p0 * a_{sun}(t-Dt)
+    """
+
+    def __init__(self, ndim, x, y, yerr, solar_x, solar_y):
+        """
+        Initialize global variables of basic cloud seeding model
+    
+        Args:
+            x (array): Independent variable
+            y (array): Dependent variable
+            yerr (array): Uncertainty on y
+            solar_x (array): Data on solar activity (x)
+            solar_y (array): Data on solar activity (y)
+        """
+
+        # Set global variables
+        self.ndim = ndim
+        self.x = x
+        self.y = y
+        self.yerr = yerr
+        self.solar_x = solar_x
+        self.solar_y = solar_y
+        self.solar_f = interpld(solar_x, solar_y, kind='cubic')
+        self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
+
+
+    def __call__(self, *params):
+        """
+        Evaluate the model using the best fit global parameters.
+        Must be called after calls to run_MCMC and show_results.
+
+        Returns x and y series for model prediction
+        """
+
+        # Use global parameters (assume set by run_mcmc) if none input
+        if (len(params) == 0):
+            params = self.params
+        alpha = params[0]
+        dt = params[1]
+
+        # Select years from data and seeding model to compare
+        wh_sm = np.where(self.x >= np.min(self.solar_x) + dt)
+        x_model = self.x[wh_sm]
+        y_model = alpha * solar_f( x_model-dt )
+        
+        return x_model, y_model
+
+    def log_lh(self, params):
+        """
+        Computes log of Gaussian likelihood function
+
+        Args:
+            params (array): Parameters for the simple climate model,
+            contain subset (in order) of the following parameters:
+                -alpha: proportionality constant
+                -dt: time delay for cooling to take effect
+
+        Returns:
+            chisq: Sum of ((y_data - y_model)/y_err)**2 
+        """
+
+        # Evaluate model at given point
+        x_model, y_model = self.__call__(params)
+
+        # Compute chisq and return
+        chisq = np.sum(((self.y - y_model)/self.yerr)**2)
         constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*self.yerr**2)))
         return constant - 0.5*chisq
