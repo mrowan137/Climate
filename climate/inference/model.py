@@ -33,6 +33,7 @@ class Model:
         self.x = x
         self.y = y
         self.yerr = yerr
+        # Create an array of ndim Priors
         self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
 
 
@@ -41,9 +42,9 @@ class Model:
         Setter for the priors on all model parameter
 
         Args:
-            i_param (integer): index of parameter to set
-            low (double): lower bound of flat prior for parameter
-            high (double): upper bound of flat prior for parameter
+            prior_type (array): type of prior to set (uniform, gaussian, jefferys)
+            param1 (array): 1st parameter of prior (either lower bound or mean)
+            param2 (array): 2nd parameter of prior (either upper bound or std dev)
         """
 
         # Assign Prior object depending on requested type 
@@ -111,7 +112,7 @@ class Model:
         ]
 
         # Set up the sampler object
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, self.log_post, args=())
+        sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.log_post, args=())
 
         # Run the sampler
         sampler.run_mcmc(starting_positions, nsteps)
@@ -123,7 +124,7 @@ class Model:
 
     def show_results(self, burnin):
         """
-        Displays results from sample()
+        Displays results from self.sample
     
         Args:
             burnin (int): Burn in time to trim the samples; plots are output to 
@@ -137,7 +138,8 @@ class Model:
             ax[i].set(ylabel="Parameter %d"%i)
     
         for i in range(self.ndim):
-            sns.displot(self.samples[:,i], ax=ax[i])
+            sns.distplot(self.samples[:,i], ax=ax[i])
+        plt.show()
 
         # Store the samples in a dataframe
         index = [i for i in range(len(self.samples[:,0]))]
@@ -158,13 +160,14 @@ class Model:
 
         # Select years from data and model to compare
         wh_model = np.where((x_model >= np.min(self.x)) & (x_model <= np.max(self.x)))
-        x_model = x_model.iloc[:].values[wh_model]
-        y_model = y_model.iloc[:].values[wh_model]
-    
+        x_model = x_model[wh_model]
+        # Here I have removed +shift 
+        y_model = y_model[wh_model]
+        
         # Plot the best-fit line, and data
         plt.figure(figsize=(10,8))
-        plt.errorbar(x, y, yerr,  linestyle='none')
-        plt.scatter(x, y, c='k',zorder=5,s=20, label='data')
+        plt.errorbar(self.x,self.y, self.yerr,  linestyle='none')
+        plt.scatter(self.x, self.y, c='k',zorder=5,s=20, label='data')
         plt.plot(x_model, y_model, label='best fit')
         plt.xlabel('X')
         plt.ylabel('Y')
@@ -181,18 +184,32 @@ class Model:
 
 
 
-class ModifiedSimpleClimateModel:
+class ModifiedSimpleClimateModel(Model):
     """
     Modified Simple Climate Model Class
     """
-    
-    def __call__(self):
+   
+    def __init__(self, ndim, x, y, yerr):
+        """
+        Calls constructor for Model base class
+        """        
+        super().__init__(ndim, x, y, yerr)
+
+
+    def __call__(self, *params):
         """
         Evaluate the model using the best fit global parameters.
         Must be called after calls to run_MCMC and show_results.
 
         Returns x and y series for model prediction
         """
+
+        # Use global parameters (assume set by run_mcmc) if none input
+        if (len(params) == 0):
+            params = self.params
+        print(params)
+        if isinstance(params, tuple):
+            params = params[0].tolist()
 
         # Run simple climate model with best fit params
         fileload = get_example_data_file_path(
@@ -207,7 +224,7 @@ class ModifiedSimpleClimateModel:
         data_scm_best = load_scm_temp(fileload)
         x_model, y_model = data_scm_best.year, data_scm_best.temp
 
-        return x_model, y_model
+        return x_model.iloc[:].values, y_model.iloc[:].values
 
 
     def log_lh(self, params):
@@ -251,7 +268,7 @@ class ModifiedSimpleClimateModel:
         return constant - 0.5*chisq
 
 
-class BasicCloudSeedingModel:
+class BasicCloudSeedingModel(Model):
     """
     Basic model for cloud seeding. DT = p0 * a_{sun}(t-Dt)
     """
@@ -275,7 +292,7 @@ class BasicCloudSeedingModel:
         self.yerr = yerr
         self.solar_x = solar_x
         self.solar_y = solar_y
-        self.solar_f = interpld(solar_x, solar_y, kind='cubic')
+        self.solar_f = interp1d(solar_x, solar_y, kind='cubic')
         self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
 
 
@@ -290,13 +307,15 @@ class BasicCloudSeedingModel:
         # Use global parameters (assume set by run_mcmc) if none input
         if (len(params) == 0):
             params = self.params
-        alpha = params[0]
-        dt = params[1]
+        if isinstance(params, tuple):
+            alpha, dt = params[0]
+        else:
+            alpha, dt = params
 
         # Select years from data and seeding model to compare
-        wh_sm = np.where(self.x >= np.min(self.solar_x) + dt)
+        wh_sm = np.where((self.x >= np.min(self.solar_x) + dt) & (self.x <= np.max(self.solar_x) + dt))
         x_model = self.x[wh_sm]
-        y_model = alpha * solar_f( x_model-dt )
+        y_model = alpha * self.solar_f( x_model-dt )
         
         return x_model, y_model
 
@@ -314,10 +333,22 @@ class BasicCloudSeedingModel:
             chisq: Sum of ((y_data - y_model)/y_err)**2 
         """
 
-        # Evaluate model at given point
+        # Evaluate model at given pointi
         x_model, y_model = self.__call__(params)
+       
+        # Get range over which to compare data and model 
+        x_min = np.max([np.min(x_model), np.min(self.x)])
+        x_max = np.min([np.max(x_model), np.max(self.x)])
+        
+        # Select the model and data values
+        wh_data = np.where((self.x <= x_max) & (self.x >= x_min))
+        wh_model = np.where((x_model <= x_max) & (x_model >= x_min))
 
+        y_data = self.y[wh_data]
+        yerr_data = self.yerr[wh_data]
+        y_model = y_model[wh_model]
+        
         # Compute chisq and return
-        chisq = np.sum(((self.y - y_model)/self.yerr)**2)
-        constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*self.yerr**2)))
+        chisq = np.sum(((y_data - y_model)/yerr_data)**2)
+        constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*yerr_data**2)))
         return constant - 0.5*chisq
