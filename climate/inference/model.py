@@ -95,7 +95,7 @@ class Model:
         parameters are printed; best-fit line is overplotted on data, with errors.
     
         Args:
-            theta_guess (array): Initial guess for parameters. Can have length < 5
+            param_guess (array): Initial guess for parameters. Can have length < 5
             nwalkers (int): Number of walkers for affine-invariant ensemble sampling;
                             must be an even number
             nsteps (int): Number of timesteps for which to run the algorithm
@@ -171,6 +171,8 @@ class Model:
         plt.plot(x_model, y_model, label='best fit')
         plt.xlabel('X')
         plt.ylabel('Y')
+        plt.xlim([np.max([self.x[0], self.solar_x[0]]),
+                  np.min([self.x[-1], self.solar_x[-1]])])
         plt.title('Model Fit to Data');
         plt.legend()
 
@@ -284,7 +286,7 @@ class BasicCloudSeedingModel(Model):
             solar_x (array): Data on solar activity (x)
             solar_y (array): Data on solar activity (y)
         """
-
+        
         # Set global variables
         self.ndim = ndim
         self.x = x
@@ -313,7 +315,8 @@ class BasicCloudSeedingModel(Model):
             alpha, dt = params
 
         # Select years from data and seeding model to compare
-        wh_sm = np.where((self.x >= np.min(self.solar_x) + dt) & (self.x <= np.max(self.solar_x) + dt))
+        wh_sm = np.where((self.x >= np.min(self.solar_x) + dt)
+                         & (self.x <= np.max(self.solar_x) + dt))
         x_model = self.x[wh_sm]
         y_model = alpha * self.solar_f( x_model-dt )
         
@@ -333,7 +336,7 @@ class BasicCloudSeedingModel(Model):
             chisq: Sum of ((y_data - y_model)/y_err)**2 
         """
 
-        # Evaluate model at given pointi
+        # Evaluate model at given point
         x_model, y_model = self.__call__(params)
        
         # Get range over which to compare data and model 
@@ -352,3 +355,14 @@ class BasicCloudSeedingModel(Model):
         chisq = np.sum(((y_data - y_model)/yerr_data)**2)
         constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*yerr_data**2)))
         return constant - 0.5*chisq
+
+
+#class CombinedModel(Model):
+#    """
+#    Combined climate model class
+#    """
+        
+
+
+
+
