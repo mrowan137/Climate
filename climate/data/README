@@ -1,3 +1,10 @@
+% This README is a commented version of the following files:
+%     -global_surface_temp_seaice_air_infer.txt
+%     -global_surface_temp_seaice_water_infer.txt
+% The original data were downloaded from:
+%
+%     http://berkeleyearth.org/data/ 
+%
 % This file contains a detailed summary of the changes in Earth's global average
 % surface temperature estimated by combining the Berkeley Earth land-surface
 % temperature field with a reinterpolated version of the HadSST ocean temperature 
