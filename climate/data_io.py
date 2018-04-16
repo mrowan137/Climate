@@ -1,5 +1,7 @@
 import os
 import sys
+import codecs
+import json
 import numpy as np
 import pandas as pd
 import glob
@@ -48,6 +50,25 @@ def load_scm_temp(data_file):
     """
     data = pd.read_csv(data_file, sep='\s+', header=None)
     data.columns = ["year", "temp"]
+    return data
+
+
+def loadj_scm_temp(data_file):
+    """Import temperature output by simple climate model from data_file (JSON version)
+
+    Args:
+        data_file (str): Location of data to be imported.
+
+    Returns:
+        data: Pandas data frame.
+
+    """
+    #data = pd.read_csv(data_file, sep='\s+', header=None)
+    fileObj = open(data_file, 'r')
+    d = json.load(fileObj)
+    data = pd.DataFrame(d)
+    data.columns = ["year", "temp"]
+    fileObj.close()
     return data
 
 
