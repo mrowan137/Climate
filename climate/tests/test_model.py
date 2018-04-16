@@ -1,4 +1,5 @@
-from climate.model import *
+from climate.inference import model
+from climate.data_io import *
 
 import pandas as  pd
 
@@ -19,8 +20,13 @@ class TestModel(TestCase):
 
         # here we expect res to be -inf because the overall temperature shift
         # of 1e9 is outside our prior range
-        priorBounds = [[-0.5, 0.7, 0.7, 0.7, 0.7] , [0.5, 1.3, 1.3, 1.3, 1.3]]
-        res = log_post_scm([1e9, 0., 0., 0., 0.], priorBounds, x, y, yerr)
+        SCM = model.ModifiedSimpleClimateModel(5, x, y, yerr)
+        prior_type = ['uniform' for i in range(5) ]
+        prior_param1 = [-0.5, 0.7, 0.7, 0.7, 0.7]
+        prior_param2 = [0.5, 1.3, 1.3, 1.3, 1.3]
+        SCM.set_priors(prior_type, prior_param1, prior_param2)
+        res = SCM.log_post([1e9, 0., 0., 0., 0.])
+        print(res)
         assert res == -np.Inf
 
         
