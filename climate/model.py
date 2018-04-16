@@ -11,6 +11,25 @@ Traditional climate model
 
 def log_lh_scm(theta, x, y, yerr):
     """Returns log of likelihood function
+    
+    The (product of) Gaussian likelihood can be justified as follows - 
+    (a) Assuming that SCM is true, then the deviation of the observed data 
+    from SCM prediction is the error.
+    (b) If the errors (of individual data points) are Gaussian, and if they 
+    are independent, then we have the likelihood being a product of Gaussians.
+    (b.I) There's no a priori reason that temperature anomaly data taken at 
+    different times have correlated errors, so we assume they are independent.
+    (b.II) An individual data point is (besides SCM's real/physical effect) 
+    subject to other effects of various sorts (e.g. measurement noise). We can 
+    write an individual data point's deviation from SCM as some function of 
+    these other effects. If these other effects do not dominate over SCM, that 
+    is, if 'noises' are small compared to 'signal', then we can Taylor expand 
+    the aforementioned function along noises and keep only first order terms - 
+    in which case a data point's deviation from SCM is a linear sum of other 
+    effects. If these effects are independent, then by central limit theorem, 
+    a linear sum of these effects will tend to obey a Gaussian distribution, 
+    regardless of the distribution of the each individual effect.
+    For both conditions in (b) satisfied, likelihood is a product of Gaussians.
 
     Args:
         x (array): Independent variable, years
