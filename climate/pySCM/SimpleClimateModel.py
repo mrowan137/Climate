@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import math
-
+import codecs
+import json
 from climate.data_io import *
 
 '''
@@ -317,6 +318,7 @@ class SimpleClimateModel:
         change and sea level change, the user also needs to provide the filename for the figure files in the parameter file.
         '''
         try:
+            """
             Filename = get_example_data_file_path('TempChangeCommented.dat', data_dir='trad_climate_model_output')
             if not Filename:
                 raise SCMError('You need to provide a filename in the Parameter set up file!') 
@@ -326,19 +328,30 @@ class SimpleClimateModel:
             for i in range(len(self.temperatureChange)):
                 writer.write(str(self.startYr+i)+"    "+str(self.temperatureChange[i])+"\n")
             writer.close()
-
-            Filename = get_example_data_file_path('TempChange.dat', data_dir='trad_climate_model_output')
+            """
+            # Write TempChange data to file
+            #Filename = get_example_data_file_path('TempChange.dat', data_dir='trad_climate_model_output')
+            Filename = get_example_data_file_path('TempChange.json', data_dir='trad_climate_model_output')
             if not Filename:
                 raise SCMError('You need to provide a filename in the Parameter set up file!') 
-            # write values to file (no comment)
-            writer = open(Filename, 'w')
-            for i in range(len(self.temperatureChange)):
-                writer.write(str(self.startYr+i)+"    "+str(self.temperatureChange[i])+"\n")
-            writer.close() 
+            # Write values to file (no comment)
+            #writer = open(Filename, 'w')
+            #for i in range(len(self.temperatureChange)):
+            #    writer.write(str(self.startYr+i)+"    "+str(self.temperatureChange[i])+"\n")
+            #writer.close()
+            years = self.startYr+np.arange(len(self.temperatureChange))
+            temps = self.temperatureChange[:]
+            z = np.array(list(zip(years,temps))).tolist()
             
+            # open the file for writing
+            fileObj = codecs.open(Filename, 'w', encoding='utf-8')             
+            json.dump(z, fileObj, separators=(',', ':'), sort_keys=True, indent=4)
+            fileObj.close()
+            
+            """
             # Plot temperature change and save figure to file if required
             fileload = get_example_data_file_path('TempChangePlot.png', data_dir='trad_climate_model_output')
-            PlotFile = fileload
+            PlotFile = None#fileload
             if PlotFile:
                 x = np.arange(self.startYr,self.endYr+1)
                 fig = plt.figure(1)
@@ -353,7 +366,9 @@ class SimpleClimateModel:
                 # save figure to file
                 plt.savefig(PlotFile)
                 plt.clf()
-                
+            """
+            """
+            # Output SeaLevelChange if needed
             filesave = get_example_data_file_path('SeaLevelChange.dat', data_dir='trad_climate_model_output')
             SeaLevelFilename = filesave
             if not SeaLevelFilename:
@@ -364,7 +379,8 @@ class SimpleClimateModel:
             for i in range(len(self.seaLevelChange)):
                 writer.write(str(self.startYr+i)+"    "+str(self.seaLevelChange[i])+"\n")
             writer.close() 
-            
+            """
+            """
             # Plot temperature change and save figure to file if required
             PlotFile = self._GetParameter('Plot sea level change')
             if PlotFile:
@@ -381,6 +397,7 @@ class SimpleClimateModel:
                 # save figure to file
                 plt.savefig(PlotFile)
                 plt.clf()
+            """
         except:
             raise
             
