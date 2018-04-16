@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import emcee
 import seaborn as sns
@@ -114,8 +115,18 @@ class Model:
         # Set up the sampler object
         sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.log_post, args=())
 
+        # Progress bar
+        width = 80
+        for i, result in enumerate(sampler.sample(starting_positions, iterations=nsteps)):
+            n = int((width+1) * float(i) / nsteps)
+            if (i == 0):
+                print('Progress: ')
+                
+            print("\r[{0}{1}]".format('#' * n, ' ' * (width - n)), end='')
+
+        print(os.linesep)
         # Run the sampler
-        sampler.run_mcmc(starting_positions, nsteps)
+        #sampler.run_mcmc(starting_positions, nsteps)
 
         # return the samples for later output
         self.samples = sampler.flatchain
@@ -127,8 +138,7 @@ class Model:
         Displays results from self.sample
     
         Args:
-            burnin (int): Burn in time to trim the samples; plots are output to 
-                         aid in diagnosing this
+            burnin (int): Burn in time to trim the samples
         """  
    
         # Plot and check for burn in time
@@ -153,15 +163,14 @@ class Model:
             q['p'+str(i)][0.50], q['p'+str(i)][0.84] - q['p'+str(i)][0.50], q['p'+str(i)][0.50] - q['p'+str(i)][0.16]))
 
         # Best-fit params
-        self.params = [ q['p'+str(i)][0.50] for i in range(self.ndim) ]
+        self.bestfit_params = [ q['p'+str(i)][0.50] for i in range(self.ndim) ]
         
-        # Evaluate the model
-        x_model, y_model = self.__call__()
+        # Evaluate the model with best fit params
+        x_model, y_model = self.__call__(self.bestfit_params)
 
         # Select years from data and model to compare
         wh_model = np.where((x_model >= np.min(self.x)) & (x_model <= np.max(self.x)))
         x_model = x_model[wh_model]
-        # Here I have removed +shift 
         y_model = y_model[wh_model]
         
         # Plot the best-fit line, and data
@@ -171,8 +180,8 @@ class Model:
         plt.plot(x_model, y_model, label='best fit')
         plt.xlabel('X')
         plt.ylabel('Y')
-        plt.xlim([np.max([self.x[0], self.solar_x[0]]),
-                  np.min([self.x[-1], self.solar_x[-1]])])
+        plt.xlim([np.max([self.x[0], x_model[0]]),
+                  np.min([self.x[-1], x_model[-1]])])
         plt.title('Model Fit to Data');
         plt.legend()
 
@@ -200,31 +209,39 @@ class ModifiedSimpleClimateModel(Model):
 
     def __call__(self, *params):
         """
-        Evaluate the model using the best fit global parameters.
-        Must be called after calls to run_MCMC and show_results.
+        Evaluate the model for input parameters
 
         Returns x and y series for model prediction
         """
 
-        # Use global parameters (assume set by run_mcmc) if none input
-        if (len(params) == 0):
-            params = self.params
-        print(params)
-        if isinstance(params, tuple):
-            params = params[0].tolist()
+        # Use global parameters (assume set by show_results) if none input
+        #if (len(params) == 0):
+        #    params = self.params
 
-        # Run simple climate model with best fit params
+        if isinstance(params, tuple):
+            params = params[0]
+
+        # Run simple climate model
         fileload = get_example_data_file_path(
             'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
         model_best = SimpleClimateModel(
-            fileload, [self.params[i] for i in range(self.ndim)])
+            fileload, [params[i] for i in range(len(params))])
         model_best.runModel()
     
         # Read in temperature change output (from simple climate model)
+        # .dat file format
+        #fileload = get_example_data_file_path(
+        #    'TempChange.dat', data_dir='trad_climate_model_output')
+
+        # .json file format
         fileload = get_example_data_file_path(
-            'TempChange.dat', data_dir='trad_climate_model_output')
-        data_scm_best = load_scm_temp(fileload)
-        x_model, y_model = data_scm_best.year, data_scm_best.temp
+            'TempChange.json', data_dir='trad_climate_model_output')
+
+        #data_scm_best = load_scm_temp(fileload)
+        data_scm_best = loadj_scm_temp(fileload)
+        
+        # Add the shift
+        x_model, y_model = data_scm_best.year, data_scm_best.temp + params[0]
 
         return x_model.iloc[:].values, y_model.iloc[:].values
 
@@ -254,9 +271,14 @@ class ModifiedSimpleClimateModel(Model):
         model.runModel()
 
         # Read in temperature change output (from simple climate model)
+        # .dat format
+        #fileload = get_example_data_file_path(
+        #    'TempChange.dat', data_dir='trad_climate_model_output')
+
+        # .json format
         fileload = get_example_data_file_path(
-            'TempChange.dat', data_dir='trad_climate_model_output')
-        data_scm = load_scm_temp(fileload)
+            'TempChange.json', data_dir='trad_climate_model_output')
+        data_scm = loadj_scm_temp(fileload)
         x_scm, y_scm = data_scm.year, data_scm.temp
 
         # Select years from data and scm to compare
@@ -300,15 +322,14 @@ class BasicCloudSeedingModel(Model):
 
     def __call__(self, *params):
         """
-        Evaluate the model using the best fit global parameters.
-        Must be called after calls to run_MCMC and show_results.
+        Evaluate the model for given params
 
         Returns x and y series for model prediction
         """
 
         # Use global parameters (assume set by run_mcmc) if none input
-        if (len(params) == 0):
-            params = self.params
+        #if (len(params) == 0):
+        #    params = self.params
         if isinstance(params, tuple):
             alpha, dt = params[0]
         else:
@@ -357,12 +378,111 @@ class BasicCloudSeedingModel(Model):
         return constant - 0.5*chisq
 
 
-#class CombinedModel(Model):
-#    """
-#    Combined climate model class
-#    """
+class CombinedModel(Model):
+    """
+    Combined model class; for parent models with n1, n2 model parameters, the 
+    combined model has a total of n1 + n2 parameters
+
+    Instantiator Args:
+        Model1 (Model): 1st model 
+        Model2 (Model): 2nd model, to be combined with first
+    """
+
+    def __init__(self, Model1, Model2):
+        """
+        Initialize global variables of combined model
+
+        Args:
+            Model1 (Model): 1st model
+            Model2 (Model): 2nd model, to be combined with first
+        """
+        
+        # Combined model has total number of parameters from parent Models
+        self.ndim = Model1.ndim + Model2.ndim
+
+        # Create an array of ndim Priors
+        self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
+
+        # Check that parent Models are compatible (check that raw data are the same)
+        if ((Model1.x != Model2.x).any()
+            or (Model1.y != Model2.y).any()
+            or (Model1.yerr != Model2.yerr)).any():
+            raise ValueError('Input data for Models do not agree! Try with same data')
+        else:
+            self.x = Model1.x
+            self.y = Model1.y
+            self.yerr = Model1.yerr
+            self.Model1 = Model1
+            self.Model2 = Model2
+
+
+    def __call__(self, *params):
+        """
+        Evaluate the model for input parameters
+
+        Returns x and y series of combined model for model prediction
+        """
+        
+        params1 = params[0][0:self.Model1.ndim]
+        params2 = params[0][self.Model1.ndim:self.ndim]
+        x_model1, y_model1 = self.Model1(params1)
+        x_model2, y_model2 = self.Model2(params2)
+        x_combined, wh1, wh2 = self.inter(x_model1, x_model2)
+
+        # Sum the output of model1, model2
+        y_combined = y_model1[wh1] + y_model2[wh2]
+
+        return x_combined, y_combined
         
 
+    def inter(self, arr1, arr2):
+        """
+        Get intersection of arrays arr1, arr2
 
+        Args:
+            arr1 (array): 1st array
+            arr2 (array): 2nd array
 
+        Returns: 
+            inter (array): intersection of arr1, arr2
+            ind1 (array): indices of arr1 which give elements in intersection
+            ind2 (array): indices of arr2 which give elements in intersection
+        """
+        ind1 = np.in1d(arr1, arr2).nonzero()
+        ind2 = np.in1d(arr2, arr1).nonzero()
+        inter = arr1[ind1]
+        return inter, ind1, ind2
 
+    
+    def log_lh(self, params):
+        """
+        Computes log of Gaussian likelihood function
+
+        Args:
+            params (array): parameters of the two Parents, Model1 and Model2
+
+        Returns:
+            chisq: Sum of ((y_data - y_model)/y_err)**2 
+        """
+
+        # Evaluate model at given point
+        x_model, y_model = self.__call__(params)
+       
+        # Get range over which to compare data and model 
+        x_min = np.max([np.min(x_model), np.min(self.x)])
+        x_max = np.min([np.max(x_model), np.max(self.x)])
+        
+        # Select the model and data values
+        wh_data = np.where((self.x <= x_max) & (self.x >= x_min))
+        wh_model = np.where((x_model <= x_max) & (x_model >= x_min))
+
+        y_data = self.y[wh_data]
+        yerr_data = self.yerr[wh_data]
+        y_model = y_model[wh_model]
+        
+        # Compute chisq and return
+        chisq = np.sum(((y_data - y_model)/yerr_data)**2)
+        constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*yerr_data**2)))
+        return constant - 0.5*chisq
+        
+    
