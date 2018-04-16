@@ -109,7 +109,7 @@ class Model:
         
         # Randomize starting positions of walkers around initial guess
         starting_positions = [
-            param_guess + 1e-4 * np.random.randn(self.ndim) for i in range(nwalkers)
+            param_guess + 1e-2 * np.random.randn(self.ndim) for i in range(nwalkers)
         ]
 
         # Set up the sampler object
