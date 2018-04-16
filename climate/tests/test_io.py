@@ -12,8 +12,8 @@ class TestIo(TestCase):
             'global_surface_temp_seaice_air_infer.txt'))
         assert data.year[0] == 1850
 
-        data_scm = load_scm_temp(get_example_data_file_path(
-            'TempChange.dat', data_dir='trad_climate_model_output'))
+        data_scm = loadj_scm_temp(get_example_data_file_path(
+            'TempChange.json', data_dir='trad_climate_model_output'))
         print(data_scm.year[0])
         assert data_scm.year[0] == 1850
         
