@@ -200,11 +200,11 @@ class ModifiedSimpleClimateModel(Model):
     Modified Simple Climate Model Class
     """
    
-    def __init__(self, ndim, x, y, yerr):
+    def __init__(self, x, y, yerr):
         """
         Calls constructor for Model base class
         """        
-        super().__init__(ndim, x, y, yerr)
+        super().__init__(5, x, y, yerr)
 
 
     def __call__(self, *params):
@@ -297,7 +297,7 @@ class BasicCloudSeedingModel(Model):
     Basic model for cloud seeding. DT = p0 * a_{sun}(t-Dt)
     """
 
-    def __init__(self, ndim, x, y, yerr, solar_x, solar_y):
+    def __init__(self, x, y, yerr, solar_x, solar_y):
         """
         Initialize global variables of basic cloud seeding model
     
@@ -310,7 +310,7 @@ class BasicCloudSeedingModel(Model):
         """
         
         # Set global variables
-        self.ndim = ndim
+        self.ndim = 2
         self.x = x
         self.y = y
         self.yerr = yerr
