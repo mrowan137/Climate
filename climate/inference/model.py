@@ -184,7 +184,7 @@ class Model:
                   np.min([self.x[-1], x_model[-1]])])
         plt.title('Model Fit to Data');
         plt.legend()
-
+        plt.show()
 
     def get_samples(self):
         """
@@ -192,6 +192,17 @@ class Model:
         """
 
         return self.samples
+
+        
+    def set_parameters(self, params):
+        """
+        Setter for model parameters
+
+        Args:
+            params (array): parameters to set
+        """
+
+        self.bestfit_params = params
 
 
 
@@ -376,6 +387,7 @@ class BasicCloudSeedingModel(Model):
         chisq = np.sum(((y_data - y_model)/yerr_data)**2)
         constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*yerr_data**2)))
         return constant - 0.5*chisq
+
 
 
 class CombinedModel(Model):
