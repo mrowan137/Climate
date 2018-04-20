@@ -76,7 +76,7 @@ class TestModel(TestCase):
 
         # Generate dataset from model of known parameters
         # Create instance of ModifiedSimpleClimateModel
-        CSM_generate = model.BasicCloudSeedingModel(x, y, yerr, years_flares, flares)
+        CSM_generate = model.BasicCloudSeedingModel(x, y, yerr, years_flares, flares, flares_unc)
 
         # Set priors
         prior_type = ['uniform' for i in range(2) ]
@@ -94,7 +94,7 @@ class TestModel(TestCase):
 
         
         # Create new model and fit it to the dataset        
-        CSM_test = model.BasicCloudSeedingModel(x_generated, y_generated, yerr_generated, years_flares, flares)
+        CSM_test = model.BasicCloudSeedingModel(x_generated, y_generated, yerr_generated, years_flares, flares, flares_unc)
 
         # Set priors
         prior_type = ['uniform' for i in range(2) ]

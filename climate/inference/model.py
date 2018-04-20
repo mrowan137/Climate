@@ -56,6 +56,8 @@ class Model:
                 self.priors[i] = prior.LogGaussianPrior(param1[i], param2[i])
             elif (prior_type[i] == 'jefferys'):
                 self.priors[i] = prior.LogJefferysPrior(param1[i], param2[i])
+            elif (prior_type[i] == 'poisson'):
+                self.priors[i] = prior.LogPoissonPrior(param1[i])
             else:
                 print("Invalid prior option. Modify inputs and try again.")
 
@@ -308,7 +310,7 @@ class BasicCloudSeedingModel(Model):
     Basic model for cloud seeding. DT = p0 * a_{sun}(t-Dt)
     """
 
-    def __init__(self, x, y, yerr, solar_x, solar_y):
+    def __init__(self, x, y, yerr, solar_x, solar_y, solar_yerr):
         """
         Initialize global variables of basic cloud seeding model
     
@@ -318,6 +320,7 @@ class BasicCloudSeedingModel(Model):
             yerr (array): Uncertainty on y
             solar_x (array): Data on solar activity (x)
             solar_y (array): Data on solar activity (y)
+            solar_yerr (array): Uncertainty on solar activity data
         """
         
         # Set global variables
@@ -327,7 +330,7 @@ class BasicCloudSeedingModel(Model):
         self.yerr = yerr
         self.solar_x = solar_x
         self.solar_y = solar_y
-        self.solar_f = interp1d(solar_x, solar_y, kind='cubic')
+        self.solar_yerr = solar_yerr
         self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
 
 
@@ -345,13 +348,19 @@ class BasicCloudSeedingModel(Model):
             alpha, dt = params[0]
         else:
             alpha, dt = params
+       
+        # Make t_lag discrete
+        dt = int(dt)
 
         # Select years from data and seeding model to compare
-        wh_sm = np.where((self.x >= np.min(self.solar_x) + dt)
+        wh_data = np.where((self.x >= np.min(self.solar_x) + dt)
                          & (self.x <= np.max(self.solar_x) + dt))
-        x_model = self.x[wh_sm]
-        y_model = alpha * self.solar_f( x_model-dt )
-        
+        wh_model = np.where((self.solar_x <= np.max(self.x) - dt)
+                         & (self.solar_x >= np.min(self.x) - dt))
+
+        x_model = self.x[wh_data]
+        y_model = alpha * self.solar_y[wh_model]
+ 
         return x_model, y_model
 
     def log_lh(self, params):
@@ -368,24 +377,31 @@ class BasicCloudSeedingModel(Model):
             chisq: Sum of ((y_data - y_model)/y_err)**2 
         """
 
+        if isinstance(params, tuple):
+            alpha, dt = params[0]
+        else:
+            alpha, dt = params
+
+        # Make t_lag discrete
+        dt = int(dt)
+                
         # Evaluate model at given point
         x_model, y_model = self.__call__(params)
        
-        # Get range over which to compare data and model 
-        x_min = np.max([np.min(x_model), np.min(self.x)])
-        x_max = np.min([np.max(x_model), np.max(self.x)])
-        
-        # Select the model and data values
-        wh_data = np.where((self.x <= x_max) & (self.x >= x_min))
-        wh_model = np.where((x_model <= x_max) & (x_model >= x_min))
+
+        # Select years from data and seeding model to compare
+        wh_data = np.where((self.x >= np.min(self.solar_x) + dt)
+                         & (self.x <= np.max(self.solar_x) + dt))
+        wh_model = np.where((self.solar_x <= np.max(self.x) - dt)
+                         & (self.solar_x >= np.min(self.x) - dt))
 
         y_data = self.y[wh_data]
         yerr_data = self.yerr[wh_data]
-        y_model = y_model[wh_model]
+        yerr_model = self.solar_yerr[wh_model]
         
         # Compute chisq and return
-        chisq = np.sum(((y_data - y_model)/yerr_data)**2)
-        constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*yerr_data**2)))
+        chisq = np.sum( (y_data - y_model)**2 / (yerr_data**2 + alpha**2*yerr_model**2) )
+        constant = np.sum(np.log(1 / np.sqrt(2.0 * np.pi * (yerr_data**2 + alpha**2*yerr_model**2)) )) 
         return constant - 0.5*chisq
 
 

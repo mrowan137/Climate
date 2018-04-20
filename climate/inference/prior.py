@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.stats import poisson
 from numpy import log, inf
 
 class Prior:
@@ -45,3 +46,15 @@ class LogGaussianPrior(Prior):
     def __call__(self, x):
         mu, sig = self.params
         return -log(2*np.pi*sig**2)/2 - (x-mu)**2/(2*sig**2)
+
+class LogPoissonPrior(Prior):
+    """
+    Returns log of the value of the Poisson prior at position x
+    """
+
+    def __call__(self, x):
+        mu = self.params
+        if (x < 0):
+            return -inf
+        
+        return np.log( poisson.pmf(int(x), mu) ) 
