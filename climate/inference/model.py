@@ -7,6 +7,20 @@ from climate.data_io import *
 from climate.pySCM.SimpleClimateModel import *
 from climate.inference import prior
 
+"""Demonstrate high quality docstrings.
+This module contains several classes that are used to define different climate 
+models (listed below):
+    -Model(): Base model containing initialization and functions that are common
+    to other climate models
+    -ModifiedSimpleClimateModel(): A traditional climate model, based on pySCM.
+    -BasicCloudSeedingModel(): A model which assumes clouds are responsible for 
+    climate trends
+    -CombinedModel(): Class which allows for the combination of two previously 
+    instantiated models.  In practice, it can be used to `merge` modified pySCM
+    model with the cloud seeding model.
+
+Sample usage is shown in tutorial.ipynb
+"""
 
 class Model:
     """
