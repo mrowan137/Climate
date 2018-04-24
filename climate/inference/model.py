@@ -176,7 +176,7 @@ class Model:
         y_model = y_model[wh_model]
         
         # Plot the best-fit line, and data
-        plt.figure(figsize=(10,8))
+        plt.figure(figsize=(14,8))
         plt.errorbar(self.x,self.y, self.yerr,  linestyle='none')
         plt.scatter(self.x, self.y, c='k',zorder=5,s=20, label='data')
         plt.plot(x_model, y_model, label='best fit')
