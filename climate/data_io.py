@@ -5,7 +5,23 @@ import json
 import numpy as np
 import pandas as pd
 import glob
-# Following the example file
+
+"""Functions used for data import and manipulation
+This module contains functions for loading data:
+    -get_example_data_filepath(): function to get the OS independent location of
+    a file located in the data directory.
+    -load_data_temp(): used to import temperature data
+    -load_scm_temp(): used to import the temperature output from the modified
+    simple climate model
+    -loadj_scm_temp(): used to import temperature, in JSON format, that is output
+    by the modified simple climate model
+    -load_data_flare(): load flare index data, and perform some initial 
+    processing of the data, to provide flare index mean and uncertainties
+    -add_in_quad(): a function to add elements of an array in quadrature
+
+Example usage is shown in tutorial.ipynb
+
+"""
 
 
 def get_example_data_file_path(filename, data_dir='data'):
