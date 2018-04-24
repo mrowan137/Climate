@@ -114,4 +114,16 @@ def load_data_flare(data_file, verbose=False):
             
             
     
+def add_in_quad(arr):
+    """
+    Add elements of an array in quadrature
 
+    Args:
+        arr (arr): vector whose elements you want to add in quadrature
+        
+    Returns:
+        res: elements of arr added in quadrature
+    """
+
+    return np.sqrt(np.sum(arr**2))
+    
