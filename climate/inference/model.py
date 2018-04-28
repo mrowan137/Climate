@@ -4,7 +4,7 @@ import emcee
 import seaborn as sns
 from scipy.interpolate import interp1d
 from climate.data_io import *
-from climate.pySCM.SimpleClimateModel import *
+from climate.pySCM.SimpleClimateModel_opt import *
 from climate.inference import prior
 
 """Demonstrate high quality docstrings.
