@@ -1,10 +1,14 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy import f2py
 import math
 import codecs
 import json
 from climate.data_io import *
 from scipy.signal import lfilter, lfiltic
+from climate.pySCM import flib as fl
+import george
+from george.kernels import ExpSquaredKernel
 
 import timeit
 
@@ -81,6 +85,7 @@ class SimpleClimateModel:
         (filling the EmissionRec) and the parameters will be read from the parameter file.
         :param Filename: path and filename of the parameter file.
         '''
+        #print("A simple climate model was born")
         # get emissions normalizations
         self.CO2_norm = theta[1]
         self.CH4_norm = theta[2]
@@ -91,9 +96,35 @@ class SimpleClimateModel:
         # get start and end year of simulation
         self.startYr = int(self._GetParameter('Start year'))
         self.endYr = int(self._GetParameter('End year'))
+        self.yrs = np.arange(self.startYr,self.endYr+1)
         fileload = get_example_data_file_path('EmissionsForSCM.dat', data_dir='pySCM')
         self.emissions = self._ReadEmissions(self._GetParameter(fileload))
+        self.simYears =  int(self._GetParameter('Years to evaluate response functions'))
+        self.oceanMLDepth = float(self._GetParameter('Ocean mixed layer depth [in meters]'))
 
+        self.ems_CO2 = self.emissions['CO2']
+        self.ems_CH4 = self.emissions['CH4']
+        self.ems_N2O = self.emissions['N2O']
+        self.ems_SOx = self.emissions['SOx']
+        
+        self.ems_CO2_err = np.ones_like(self.emissions['CO2'])*0.75
+        self.ems_CH4_err = np.ones_like(self.emissions['CH4'])*0.75
+        self.ems_N2O_err = np.ones_like(self.emissions['N2O'])*0.75
+        self.ems_SOx_err = np.ones_like(self.emissions['SOx'])*0.75
+
+        # set up gaussian process
+        self.kernel = ExpSquaredKernel(1.0)
+        self.gp = george.GP(self.kernel)
+
+        
+        # compile Fortran functions
+        #with open('CO2ems.f','rb') as sourcefile:
+        #    src = sourcefile.read()
+
+        #print(src)
+        #f2py.compile(src, modulename='CO2ems')
+        #import CO2ems
+        #print(CO2ems.zadd([1,2,3], [1,2], [3,4], 1000))
 
     
     def runModel(self, RadForcingFlag = False):
@@ -155,7 +186,50 @@ class SimpleClimateModel:
         
         if (RadForcingFlag):
             return self.RadForcing
-    
+
+    def runModel_gp(self, params):
+        ''' 
+        This function runs the simple climate model. A number of private functions will be called but also a number of
+        'independent' functions (detailed below). The model takes the atmosheric GHG emissions as input, converts them
+        into concentrations and calculates the radiative forcing from the change in GHG concentrations over the years. Finally,
+        the temperature change is derived from the change in radiative forcing which is required to calculate the change in sea
+        level. For more information on the theory behind those calculations, please refer to 'Theory' page.
+        
+        To run the simple climate model, type:
+        
+        >>> SCM.runModel() 
+        
+        By default, the calculated temperature change and sea level change will be written to a textfile where the location and name
+        of the textfile need to be specified in the parameter file. If the user wants to, a figure showing the temperature change and 
+        sea level change, respectively, will be saved to file and again the path and filename have to be specified in the parameter file.   
+        
+        :param: RadForcingFlag (bool) which is set to 'False' by default. If it is set to 'True' the function returns the calculated radiative forcing.
+        :returns: This function returns the radiative forcing (numpy.array) if the flag was set to true. Otherwise, nothing will be returned.
+        '''
+        #print("The params",params)
+        if isinstance(params, tuple):
+            a1,a2,a3,a4 = params[0]
+        else:
+            a1,a2,a3,a4 = params
+        
+        # Sample using gpr
+        self.gp.compute(self.yrs, a1* self.ems_CO2_err)
+        self.emissions['CO2']=self.gp.sample_conditional(a1*self.ems_CO2,self.yrs,1)
+        self.gp.compute(self.yrs, a2*self.ems_CO2_err)
+        self.emissions['N2O']=self.gp.sample_conditional(a2*self.ems_N2O,self.yrs,1)
+        self.gp.compute(self.yrs, a3*self.ems_N2O_err)
+        self.emissions['CH4']=self.gp.sample_conditional(a3*self.ems_CH4,self.yrs,1)
+        self.gp.compute(self.yrs, a4*self.ems_CH4_err)
+        self.emissions['SOx']=self.gp.sample_conditional(a4*self.ems_SOx,self.yrs,1)
+
+        self.CO2Concs = CO2EmissionsToConcs(self.emissions, self.simYears, self.oceanMLDepth)
+        self.CH4Concs = CH4EmssionstoConcs(self.emissions)
+        self.N2OConcs = N2OEmssionstoConcs(self.emissions)
+        self.RadForcing = CalcRadForcing(self.emissions, self.CO2Concs, self.CH4Concs, self.N2OConcs)
+        self.temperatureChange = CalculateTemperatureChange(self.simYears, self.RadForcing)
+
+        return self.temperatureChange
+        
     '''
     Optional output can be produced, e.g. concentration output file & figure
     '''  
@@ -519,50 +593,68 @@ def CO2EmissionsToConcs(emissions, numYears, OceanMLDepth):
     oceanResponse = GenerateOceanResponseFunction(numYears, OceanMLDepth)
     bioResponse = GenerateBiosphereResponseFunction(numYears)
 
-    yrInds = np.arange(len(emissions['CO2'])-1)
+    #yrInds = np.arange(len(emissions['CO2'])-1)
     #seaWaterPCO2 = np.where(yrInds>0,
     #                        DeltaSeaWaterCO2FromOceanDIC(surfaceOceanDIC)[1::],
     #                        seaWaterPCO2[1::])
 
-    for yrInd in range(len(emissions['CO2'])-1):
-        """
-        if (yrInd > 0):
-            seaWaterPCO2[yrInd] = DeltaSeaWaterCO2FromOceanDIC(surfaceOceanDIC[yrInd])
+    #for yrInd in range(len(emissions['CO2'])-1):
+    #    """
+    #    if (yrInd > 0):
+    #        seaWaterPCO2[yrInd] = DeltaSeaWaterCO2FromOceanDIC(surfaceOceanDIC[yrInd])
 
-        atmosSeaFlux[yrInd] = AirSeaGasExchangeCoeff*(atmosCO2[yrInd]-seaWaterPCO2[yrInd])
+    #    atmosSeaFlux[yrInd] = AirSeaGasExchangeCoeff*(atmosCO2[yrInd]-seaWaterPCO2[yrInd])
         # delta is the amount of CO2 taken out of the atmosphere due to stimulated plant growth minus the amount of CO2 returned
         # to the atmosphere due to the decay of organic material.
-        delta = BiosphereNPP_0*CO2FertFactor*np.log(1.0+(atmosCO2[yrInd]/CO2ppm_0))/PgCperppm-XAtmosBio
-        XAtmosBio += delta
-        atmosBioFlux[yrInd] += XAtmosBio
-        # Accumulate committments of these fluxes to all future times for SurfaceOceanDIC and AtmosBioFlux.
-        for j in range(yrInd+1,len(surfaceOceanDIC)):
-            Hold = surfaceOceanDIC[j]
-            Hold = Hold + atmosSeaFlux[yrInd] * oceanResponse[j-yrInd];
-            surfaceOceanDIC[j] = Hold
+    #    delta = BiosphereNPP_0*CO2FertFactor*np.log(1.0+(atmosCO2[yrInd]/CO2ppm_0))/PgCperppm-XAtmosBio
+    #    XAtmosBio += delta
+    #    atmosBioFlux[yrInd] += XAtmosBio
+    #    # Accumulate committments of these fluxes to all future times for SurfaceOceanDIC and AtmosBioFlux.
+    #    for j in range(yrInd+1,len(surfaceOceanDIC)):
+    #        Hold = surfaceOceanDIC[j]
+    #        Hold = Hold + atmosSeaFlux[yrInd] * oceanResponse[j-yrInd];
+    #        surfaceOceanDIC[j] = Hold
 
-        for j in range(yrInd+1,len(atmosBioFlux)):
-            atmosBioFlux[j] = atmosBioFlux[j] - XAtmosBio * bioResponse[j-yrInd]
+    #    for j in range(yrInd+1,len(atmosBioFlux)):
+    #        atmosBioFlux[j] = atmosBioFlux[j] - XAtmosBio * bioResponse[j-yrInd]
 
-        atmosCO2[yrInd+1] = atmosCO2[yrInd]+(emissions[yrInd].CO2/PgCperppm)-atmosSeaFlux[yrInd]-atmosBioFlux[yrInd]
-        """
-        if (yrInd > 0):
-            seaWaterPCO2[yrInd] = DeltaSeaWaterCO2FromOceanDIC(surfaceOceanDIC[yrInd])
+    #    atmosCO2[yrInd+1] = atmosCO2[yrInd]+(emissions[yrInd].CO2/PgCperppm)-atmosSeaFlux[yrInd]-atmosBioFlux[yrInd]
+    #    """
+    #    if (yrInd > 0):
+    #        seaWaterPCO2[yrInd] = DeltaSeaWaterCO2FromOceanDIC(surfaceOceanDIC[yrInd])
             
-        atmosSeaFlux[yrInd] = AirSeaGasExchangeCoeff*(atmosCO2[yrInd]-seaWaterPCO2[yrInd])
-        #delta = BiosphereNPP_0*CO2FertFactor*np.log(1.0+(atmosCO2[yrInd]/CO2ppm_0))/PgCperppm-XAtmosBio
-        #XAtmosBio += delta
-        # XAtmosBio = BiosphereNPP_0*CO2FertFactor*np.log(1.0+(atmosCO2[yrInd]/CO2ppm_0))/PgCperppm
-        #atmosBioFlux[yrInd] += XAtmosBio
-        atmosBioFlux[yrInd] = (atmosBioFlux[yrInd]
-                               + BiosphereNPP_0*CO2FertFactor*np.log(1.0+(atmosCO2[yrInd]/CO2ppm_0))/PgCperppm)
-        v = np.arange(yrInd+1,len(surfaceOceanDIC))
-        surfaceOceanDIC[v] = (surfaceOceanDIC[v] + atmosSeaFlux[yrInd] * oceanResponse[v-yrInd])
-        atmosBioFlux[v] = (atmosBioFlux[v]
-                           - (BiosphereNPP_0*CO2FertFactor*np.log(1.0+(atmosCO2[yrInd]/CO2ppm_0))/PgCperppm)
-                           * bioResponse[v-yrInd])
-        atmosCO2[yrInd+1] = atmosCO2[yrInd]+(emissions['CO2'][yrInd]/PgCperppm)-atmosSeaFlux[yrInd]-atmosBioFlux[yrInd]
+    #    atmosSeaFlux[yrInd] = AirSeaGasExchangeCoeff*(atmosCO2[yrInd]-seaWaterPCO2[yrInd])
+    #    delta = BiosphereNPP_0*CO2FertFactor*np.log(1.0+(atmosCO2[yrInd]/CO2ppm_0))/PgCperppm-XAtmosBio
+    #    XAtmosBio += delta
+        #XAtmosBio = BiosphereNPP_0*CO2FertFactor*np.log(1.0+(atmosCO2[yrInd]/CO2ppm_0))/PgCperppm
+    #    atmosBioFlux[yrInd] += XAtmosBio
+        #atmosBioFlux[yrInd] = (atmosBioFlux[yrInd]
+        #                       + BiosphereNPP_0*CO2FertFactor*np.log(1.0+(atmosCO2[yrInd]/CO2ppm_0))/PgCperppm)
+        #v = np.arange(yrInd+1,len(surfaceOceanDIC))
+        #surfaceOceanDIC[v] = (surfaceOceanDIC[v] + atmosSeaFlux[yrInd] * oceanResponse[v-yrInd])
+        #atmosBioFlux[v] = (atmosBioFlux[v]
+        #                   - (BiosphereNPP_0*CO2FertFactor*np.log(1.0+(atmosCO2[yrInd]/CO2ppm_0))/PgCperppm)
+        #                   * bioResponse[v-yrInd])
+    #    for j in range(yrInd+1,len(surfaceOceanDIC)):
+    #        Hold = surfaceOceanDIC[j]
+    #        Hold = Hold + atmosSeaFlux[yrInd] * oceanResponse[j-yrInd]
+    #        surfaceOceanDIC[j] = Hold
 
+    #    for j in range(yrInd+1,len(atmosBioFlux)):
+    #        atmosBioFlux[j] = atmosBioFlux[j] - XAtmosBio * bioResponse[j-yrInd]
+        
+    #    atmosCO2[yrInd+1] = atmosCO2[yrInd]+(emissions['CO2'][yrInd]/PgCperppm)-atmosSeaFlux[yrInd]-atmosBioFlux[yrInd]
+
+    #print("1",atmosCO2)
+    #atmosCO2_a = np.zeros(len(atmosCO2))
+    #atmosCO2_a[:] = atmosCO2[:]
+    #print(fl.CO2ems(oceanResponse, bioResponse, len(bioResponse), len(atmosCO2), atmosCO2))
+    atmosCO2[:]=0.
+    atmosCO2=fl.co2ems(oceanresponse=oceanResponse.astype(np.float64),
+                         bioresponse=bioResponse.astype(np.float64),
+                         emsco2=emissions['CO2'].astype(np.float64))
+    #print("2",atmosCO2_b)
+    #print("3",atmosCO2_a - atmosCO2_b)
     return atmosCO2
 
 def GenerateBiosphereResponseFunction(numYears):
@@ -749,17 +841,18 @@ def CalculateTemperatureChange(numYears, radForcing):
     lradF = len(radForcing)
     result = np.zeros(lradF)
     tempResFunc = GenerateTempResponseFunction(numYears)
-    u = np.arange(lradF)
-    for i in u:
-        v = np.arange(i, lradF)
-        result[v] = result[v] + radForcing[i] * tempResFunc[v-i]
+    #u = np.arange(lradF)
+    #for i in u:
+    #    v = np.arange(i, lradF)
+    #    result[v] = result[v] + radForcing[i] * tempResFunc[v-i]
         #result[np.arange(i,lradF)] = result[np.arange(i,lradF)] + radForcing[i] * tempResFunc[0:(lradF-i)]
 
     #tempResFuncMat = np.array([(i*[0])+list(radForcing[i]*tempResFunc[0:(len(radForcing)-i)]) for i in u])
     #result = np.cumsum(tempResFuncMat, axis=0)[-1]
     #print('The Result: ', result)
-    result = result * ClimateSensitivity
-
+    #result = result * ClimateSensitivity
+    result=fl.calctchange(tempresfunc=tempResFunc.astype(np.float64),
+                          radforcing=radForcing.astype(np.float64))    
     return result
 
 def CalculateSeaLevelChange(numYears, tempChange):
