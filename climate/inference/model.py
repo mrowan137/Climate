@@ -318,7 +318,70 @@ class ModifiedSimpleClimateModel(Model):
         constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*self.yerr**2)))
         return constant - 0.5*chisq
 
+    
+class ModifiedSimpleClimateModel_gp(Model):
+    """
+    Modified Simple Climate Model Class
+    """
+   
+    def __init__(self, x, y, yerr):
+        """
+        Calls constructor for Model base class
+        """        
+        super().__init__(5, x, y, yerr)
+        fileload = get_example_data_file_path(
+            'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
+        # default initialization
+        self.model = SimpleClimateModel(
+            fileload, [0,1,1,1,1])
+        
 
+    def __call__(self, params):
+        """
+        Evaluate the model for input parameters
+
+        Returns x and y series for model prediction
+        """
+        #print("in SCM call, ",params)
+        # Run simple climate model
+        y_model = self.model.runModel_gp(params[1::]) + params[0]
+        x_model = self.model.yrs
+        
+        return x_model, y_model
+
+
+    def log_lh(self, params):
+        """
+        Computes log of Gaussian likelihood function
+
+        Args:
+            params (array): Parameters for the simple climate model,
+	    contain subset (in order) of the following parameters:
+                -shift: Overall shift of the temperature curve output by SCM
+                -CO2_norm: Normalization for CO2 emissions
+                -CH4_norm:       "        "  CH4     "
+                -N2O_norm:       "        "  N2O     " 
+                -SOx_norm:       "        "  SOx     "
+
+        Returns:
+            chisq: Sum of ((y_data - y_model)/y_err)**2 
+        """
+    
+        # Run simple climate model and save output
+        y_scm = self.model.runModel_gp(params[1::])
+        x_scm = self.model.yrs
+        
+        # Select years from data and scm to compare
+        wh_scm = np.where((x_scm >= np.min(self.x)) & (x_scm <= np.max(self.x)))
+        x_scm = x_scm[wh_scm]
+        y_scm = y_scm[wh_scm] + params[0]
+    
+        # Compute chisq and return
+        chisq = np.sum(((self.y - y_scm)/self.yerr)**2)
+        constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*self.yerr**2)))
+        return constant - 0.5*chisq
+    
+    
 class BasicCloudSeedingModel(Model):
     """
     Basic model for cloud seeding. DT = p0 * a_{sun}(t-Dt)
