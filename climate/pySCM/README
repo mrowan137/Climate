@@ -1,3 +1,7 @@
+The version of pySCM in this directory has been modified from the original (see below).
+f2py is required to use the wrapper functions in flib.F90.  To compile:
+     f2py -c -m flib flib.f90
+
 Metadata-Version: 1.1
 Name: pySCM
 Version: 0.1.2
