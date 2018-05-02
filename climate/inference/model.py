@@ -6,6 +6,9 @@ from scipy.interpolate import interp1d
 from climate.data_io import *
 from climate.pySCM.SimpleClimateModel_opt import *
 from climate.inference import prior
+import george
+from george import kernels
+import scipy.optimize as op
 
 """Demonstrate high quality docstrings.
 This module contains several classes that are used to define different climate 
@@ -482,6 +485,192 @@ class BasicCloudSeedingModel(Model):
         return constant - 0.5*chisq
 
 
+class BasicCloudSeedingModel_gp(Model):
+    """
+    Basic model for cloud seeding. DT = p0 * a_{sun}(t-Dt)
+    """
+
+    def __init__(self, x, y, yerr, solar_x, solar_y, solar_yerr):
+        """
+        Initialize global variables of basic cloud seeding model
+    
+        Args:
+            x (array): Independent variable
+            y (array): Dependent variable
+            yerr (array): Uncertainty on y
+            solar_x (array): Data on solar activity (x)
+            solar_y (array): Data on solar activity (y)
+            solar_yerr (array): Uncertainty on solar activity data
+        """
+        
+        # Set global variables
+        self.ndim = 2
+        self.x = x
+        self.y = y
+        self.yerr = yerr
+        self.solar_x, self.solar_y, self.solar_yerr = self.GaussianProcessRegression(solar_x, solar_y, solar_yerr)
+        self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
+
+
+    def __call__(self, *params):
+        """
+        Evaluate the model for given params
+
+        Returns x and y series for model prediction
+        """
+
+        # Use global parameters (assume set by run_mcmc) if none input
+        #if (len(params) == 0):
+        #    params = self.params
+        if isinstance(params, tuple):
+            alpha, dt = params[0]
+        else:
+            alpha, dt = params
+       
+        # Make dt years with daily precision
+        dt = int(dt*365)
+        dt = float(dt)/365
+        
+        # Select years from data and seeding model to compare
+        wh_data = np.where((self.x >= np.min(self.solar_x) + dt)
+                         & (self.x <= np.max(self.solar_x) + dt))
+        
+        wh_model = np.where((self.solar_x <= np.max(self.x) - dt)
+                         & (self.solar_x >= np.min(self.x) - dt))
+        
+        #x_model = self.x[wh_data]
+        x_model = self.solar_x[wh_model]
+        y_model = alpha * self.solar_y[wh_model]
+        
+        #print(x_model[0], x_model[-1], len(x_model))
+        #print(y_model[0], y_model[-1], len(y_model))
+        # Take yearly values to compare to data
+        x_model = x_model[::365]
+        y_model = y_model[::365]
+        
+        if (dt>0):
+            x_model = x_model[:-1]
+            y_model = y_model[:-1]
+        if (dt<0):
+            x_model = x_model[1:]
+            y_model = y_model[1:]
+
+        return x_model, y_model
+
+
+    def GaussianProcessRegression(self, x, y, yerr):
+        """
+        Does Gaussian Process Regression on data for interpolation
+        
+        Args: 
+            x (array): times of solar flare index measurements
+            y (array): solar flare index
+            yerr (array): solar flare uncertainties
+
+        Returns: 
+            x_predict (array): interpolated times
+            y_predict (array): interpolated solar flare indices
+            yerr_predict (array): interpolated uncertainty      
+        """
+
+        # Define kernels
+        kernel_expsq = 38**2 * kernels.ExpSquaredKernel(metric=10**2)
+        kernel_periodic = 150**2 * kernels.ExpSquaredKernel(2**2) * kernels.ExpSine2Kernel(gamma=0.05, log_period=np.log(11))
+        kernel_poly = 5**2 * kernels.RationalQuadraticKernel(log_alpha=np.log(.78), metric=1.2**2)
+        kernel_extra = 5**2 * kernels.ExpSquaredKernel(1.6**2)
+        kernel = kernel_expsq + kernel_periodic + kernel_poly + kernel_extra
+        
+        # Create GP object
+        gp = george.GP(kernel, mean=np.mean(y), fit_mean=True)
+        gp.compute(x, yerr)
+
+        # Define objective function to optimize (log-likelihood)
+        def nll(p):
+            gp.set_parameter_vector(p)
+            ll = gp.lnlikelihood(y, quiet=True)
+            return -ll if np.isfinite(ll) else 1e25
+
+        # Define gradient of objective function
+        def grad_nll(p):
+            gp.set_parameter_vector(p)
+            return -gp.grad_lnlikelihood(y, quiet=True)
+    
+        # Run optimization routine
+        p0 = gp.get_parameter_vector()
+        results = op.minimize(nll,p0, jac=grad_nll, method="BFGS")
+
+        # Update kernel
+        gp.set_parameter_vector(results.x)
+
+        # Interpolate to daily precision
+        x_predict = np.linspace(min(x), max(x), 13871)
+        mu, var = gp.predict(y, x_predict, return_var=True)
+
+        # Plot result
+        plt.fill_between(x_predict, mu-np.sqrt(var), mu+np.sqrt(var), color="k", alpha=0.2)
+        plt.errorbar(x, y, yerr=yerr, fmt=".k", capsize=0)
+
+        return x_predict, mu, np.sqrt(var)
+
+    def log_lh(self, params):
+        """
+        Computes log of Gaussian likelihood function
+
+        Args:
+            params (array): Parameters for the simple climate model,
+            contain subset (in order) of the following parameters:
+                -alpha: proportionality constant
+                -dt: time delay for cooling to take effect
+
+        Returns:
+            chisq: Sum of ((y_data - y_model)/y_err)**2 
+        """
+
+        if isinstance(params, tuple):
+            alpha, dt = params[0]
+        else:
+            alpha, dt = params
+
+        # Make dt in years with daily precision
+        dt = int(dt*365)
+        dt = float(dt)/365         
+        
+        if(dt>=1. or dt<=-1.):
+            return -np.inf
+ 
+        # Evaluate model at given point
+        x_model, y_model = self.__call__(params)
+
+        # Select years from data and seeding model to compare
+        wh_data = np.where((self.x >= np.min(self.solar_x) + dt)
+                         & (self.x <= np.max(self.solar_x) + dt))
+        wh_model = np.where((self.solar_x <= np.max(self.x) - dt)
+                         & (self.solar_x >= np.min(self.x) - dt))
+       
+        y_data = self.y[wh_data]
+        x_data = self.x[wh_data]
+        yerr_data = self.yerr[wh_data]
+        yerr_model = self.solar_yerr[wh_model]
+        
+        # Take yearly values to compare to data
+        yerr_model = yerr_model[::365]
+        if (dt>0):
+            yerr_model = yerr_model[:-1]
+        if (dt<0):
+            yerr_model = yerr_model[1:] 
+            
+        #print("dt: ", dt)
+        #print("Solar year data bounded by : ", np.min(self.x)-dt , np.max(self.x)-dt)
+        #print("Temp year data bounded by : ", np.min(self.solar_x)+dt , np.max(self.solar_x)+dt)
+        #print(x_model)
+        #print(x_data)
+
+        # Compute chisq and return
+        chisq = np.sum( (y_data - y_model)**2 / (yerr_data**2 + alpha**2*yerr_model**2) )
+        constant = np.sum(np.log(1 / np.sqrt(2.0 * np.pi * (yerr_data**2 + alpha**2*yerr_model**2)) )) 
+        return constant - 0.5*chisq
+
+    
 
 class CombinedModel(Model):
     """
