@@ -1,5 +1,9 @@
 from setuptools import setup
+from numpy.distutils.core import setup, Extension
+import os
 
+ext = Extension(name = 'flib',
+                sources = [os.path.join(os.getcwd(),'climate','pySCM','flib.F90')])                
 
 
 setup(name='climate',
@@ -23,4 +27,6 @@ setup(name='climate',
       test_suite='nose.collector',
       
       tests_require=['nose'],
+
+      ext_modules = [ext]
 )
