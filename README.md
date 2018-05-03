@@ -4,7 +4,9 @@ This package investigates the role that cloud seeding may play in Earth's
 climate trends, and how such a model compares to traditional models that
 consider primarily the greenhouse gas (GHG) effect.
 
-Installation (requires a fortran compiler): 
+Installation (requires a fortran compiler):
+	[Linux] sudo apt-get install gfortran 
+
 python setup.py build
 python setup.py install
 
