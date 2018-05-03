@@ -6,7 +6,8 @@ import codecs
 import json
 from climate.data_io import *
 from scipy.signal import lfilter, lfiltic
-from climate.pySCM import flib as fl
+#from climate.pySCM import flib as fl
+import flib as fl
 import george
 from george.kernels import ExpSquaredKernel
 
