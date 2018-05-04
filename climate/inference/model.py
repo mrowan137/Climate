@@ -128,7 +128,7 @@ class Model:
         
         # Randomize starting positions of walkers around initial guess
         starting_positions = [
-            param_guess + 1e-2 * np.random.randn(self.ndim) for i in range(nwalkers)
+            param_guess + 1e-4 * np.random.randn(self.ndim) for i in range(nwalkers)
         ]
 
         # Set up the sampler object
@@ -779,4 +779,166 @@ class CombinedModel(Model):
         constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*yerr_data**2)))
         return constant - 0.5*chisq
         
+
+class GPRInterpolator(Model):
+    """
+    Gaussian Process Regression for interpolating a data set with variable factor increase
+    in domain resolution
+    """
+
+    def __init__(self, x, y, yerr, subdivisions):
+        """
+        Initialize global variables of Gaussian Process Regression Interpolator
     
+        Args:
+            x (array): Independent variable
+            y (array): Dependent variable
+            yerr (array): Uncertainty on y
+            subdivisions: The number of subdivisions between data points
+        """
+
+        # Define kernels
+        kernel_expsq = 38**2 * kernels.ExpSquaredKernel(metric=10**2)
+        kernel_periodic = 150**2 * kernels.ExpSquaredKernel(2**2) * kernels.ExpSine2Kernel(gamma=0.05, log_period=np.log(11))
+        kernel_poly = 5**2 * kernels.RationalQuadraticKernel(log_alpha=np.log(.78), metric=1.2**2)
+        kernel_extra = 5**2 * kernels.ExpSquaredKernel(1.6**2)
+        kernel = kernel_expsq + kernel_periodic + kernel_poly + kernel_extra
+
+        # Create GP object
+        self.gp = george.GP(kernel, mean=np.mean(y), fit_mean=True)
+        self.gp.compute(x, yerr)
+    
+        # Set global variables
+        self.ndim = len(self.gp)
+        print(self.ndim)
+        self.x = x
+        self.y = y
+        self.yerr = yerr
+        self.subdivisions = subdivisions
+        self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ] 
+        self.x_predict = np.linspace(min(self.x), max(self.x), subdivisions*(len(self.x)-1) + 1 )   
+
+
+    def run_MCMC(self, nwalkers, nsteps):
+        """
+        Samples the posterior distribution via the affine-invariant ensemble 
+        sampling algorithm; plots are output to diagnose burn-in time; best-fit
+        parameters are printed; best-fit line is overplotted on data, with errors.
+    
+        Args:
+            nwalkers (int): Number of walkers for affine-invariant ensemble sampling;
+                            must be an even number
+            nsteps (int): Number of timesteps for which to run the algorithm
+
+
+        Returns:
+            Samples (array): Trajectories of the walkers through parameter spaces.
+                             This array has dimension (nwalkers) x (nsteps) x (ndim)
+        """
+
+        # Define objective function to optimize (log-likelihood)
+        def nll(p):
+            self.gp.set_parameter_vector(p)
+            ll = self.gp.lnlikelihood(self.y, quiet=True)
+            return -ll if np.isfinite(ll) else 1e25
+
+        # Define gradient of objective function
+        def grad_nll(p):
+            self.gp.set_parameter_vector(p)
+            return -self.gp.grad_lnlikelihood(self.y, quiet=True)
+
+        # Run optimization routine
+        p0 = self.gp.get_parameter_vector()
+        results = op.minimize(nll,p0, jac=grad_nll, method="BFGS")
+
+        # Update kernel
+        self.gp.set_parameter_vector(results.x)
+
+        # Call Model.run_MCMC
+        super().run_MCMC(self.gp.get_parameter_vector(), nwalkers, nsteps)        
+
+    def __call__(self, x_in):
+        """
+        Returns x, y, and yerr from GPR evaluated at x_in  
+        """
+        
+        # Explicitly declare min/max to avoid binary conversion rounding error 
+        x_in_min = np.min(self.x_predict.astype(np.float32))
+        x_in_max = np.max(self.x_predict.astype(np.float32))
+        wh_x_in = np.where((x_in.astype(np.float32) >= x_in_min) & (x_in.astype(np.float32) <= x_in_max))
+        x_in_sub = x_in[wh_x_in]
+
+        x_out_min = np.min(x_in_sub.astype(np.float32))
+        x_out_max = np.max(x_in_sub.astype(np.float32))
+        wh_x_out = np.where((self.x_predict.astype(np.float32) >= x_out_min) & (self.x_predict.astype(np.float32) <= x_out_max))
+        x_out = self.x_predict[wh_x_out]
+        
+        # Downsample
+        x_out = x_out[::self.subdivisions]
+        y_out = self.y_predict[::self.subdivisions]
+        yerr_out = self.yerr_predict[::self.subdivisions]
+
+        return x_out, y_out, yerr_out
+
+
+    def log_lh(self, params):
+        """
+        Computes log likelihood for GPR using GP.lnlikelihood
+        Args:
+            params (array): Parameters on which to compute log likelihood
+        """
+   
+        # Update the kernel parameters and compute log-likelihood
+        self.gp.set_parameter_vector(params) 
+        return self.gp.lnlikelihood(self.y, quiet=True)
+
+    
+    def show_results(self, burnin):
+        """
+        Displays results from interpolative prediction
+    
+        Args:
+            burnin (int): Burn in time to trim the samples
+        """
+
+        # Compute sample size 
+        n_samples = 200
+
+        # Create array to save prediction values
+        y_predict = np.zeros((n_samples*2, len(self.x_predict)))
+
+        # Plot data
+        plt.figure(figsize=(14,8))
+        plt.errorbar(self.x, self.y, self.yerr,  linestyle='none')
+        plt.scatter(self.x, self.y, c='k',zorder=5,s=20, label='Data')
+       
+        # Plot samples from GPR
+        for i in range(n_samples):
+            # Get random parameter sample
+            r = np.random.randint(self.samples.shape[0])
+            self.gp.set_parameter_vector(self.samples[r])
+
+            # Get 2 predictions per sample: upper and lower bound
+            y_predict[i,:], var = self.gp.predict(self.y, self.x_predict, return_var=True)
+            y_predict[i+n_samples,:] = y_predict[i,:] + np.sqrt(np.abs(var))
+            y_predict[i,:] = y_predict[i,:] -  np.sqrt(np.abs(var))
+
+            # Plot the random sample    
+            plt.plot(self.x_predict, y_predict[i,:], "b", alpha=0.1)
+            plt.plot(self.x_predict, y_predict[i+n_samples,:], "b", alpha=0.1)
+       
+        # Compute point estimate for prediction and error
+        self.y_predict = np.average(y_predict, axis=0)
+        self.yerr_predict = np.sqrt(np.var(y_predict, axis=0))
+        
+        # Plot point estimate for prediction and error
+        plt.errorbar(self.x_predict, self.y_predict, self.yerr_predict,  linestyle='none')
+        plt.scatter(self.x_predict, self.y_predict, c='r',zorder=5,s=10, label='GPR Prediction')
+
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.xlim([np.max([self.x[0], self.x_predict[0]]),
+                  np.min([self.x[-1], self.x_predict[-1]])])
+        plt.title('Model Fit to Data');
+        plt.legend()
+        plt.show()

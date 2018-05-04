@@ -58,3 +58,15 @@ class LogPoissonPrior(Prior):
             return -inf
         
         return np.log( poisson.pmf(int(x), mu) ) 
+
+class LogExponentialDecayPrior(Prior):
+    """
+    Returns log of the value of the exponential decay prior at position x
+    """
+
+    def __call__(self, x):
+        lifetime = self.params
+        if (x < 0):
+            return -inf
+
+        return -np.log(lifetime) - x/lifetime
