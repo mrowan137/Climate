@@ -128,7 +128,7 @@ class SimpleClimateModel:
         #print(CO2ems.zadd([1,2,3], [1,2], [3,4], 1000))
 
     
-    def runModel(self, RadForcingFlag = False):
+    def runModel(self, RadForcingFlag = False, save_output=False):
         ''' 
         This function runs the simple climate model. A number of private functions will be called but also a number of
         'independent' functions (detailed below). The model takes the atmosheric GHG emissions as input, converts them
@@ -181,13 +181,19 @@ class SimpleClimateModel:
         #print('seaLevelChange elapsed: ',elapsed)
 
         #start_time = timeit.default_timer()
-        self._SaveTempAndSeaLevelChange()
+        if (save_output):
+            self._SaveTempAndSeaLevelChange()
         #elapsed = timeit.default_timer() - start_time
         #print('SaveTempAndSeaLevel elapsed: ',elapsed)
         
         if (RadForcingFlag):
             return self.RadForcing
 
+
+        years = self.startYr+np.arange(len(self.temperatureChange))
+        temps = self.temperatureChange[:]
+        return years, temps
+        
     def runModel_gp(self, params):
         ''' 
         This function runs the simple climate model. A number of private functions will be called but also a number of

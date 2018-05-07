@@ -50,8 +50,7 @@ class TestModel(TestCase):
         SCM_test.run_MCMC( param_guess=[0.3], nwalkers=10, nsteps=400)
         SCM_test.show_results(burnin=100)
         
-        print('Check that parameter result is consisitent with 0.0 shift and 1.0',
-                ' normalization on all emissions curves')
+        print('Check that parameter result is consisitent with 0.0 shift')
 
 
     def test_BasicCloudSeedingModel(self):
@@ -65,9 +64,9 @@ class TestModel(TestCase):
         yerr = yerr.values[0::12]
         
         # Get solar data
-        fileload = data_io.get_example_data_file_path(
+        fileload = get_example_data_file_path(
             'SN_y_tot_V2.0.txt', data_dir='data/sunspots')
-        data_sunspots = data_io.load_data_y_sunspot(fileload)
+        data_sunspots = load_data_y_sunspot(fileload)
         
         # Get np.arrays for data series
         years_sunspots = np.floor(data_sunspots['year'].values[118::])

@@ -241,7 +241,9 @@ class ModifiedSimpleClimateModel(Model):
     def __init__(self, x, y, yerr):
         """
         Calls constructor for Model base class
-        """        
+        """
+        self.fileload_scm = get_example_data_file_path(
+            'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
         super().__init__(1, x, y, yerr)
 
 
@@ -262,26 +264,13 @@ class ModifiedSimpleClimateModel(Model):
         # Run simple climate model
         fileload = get_example_data_file_path(
             'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
-        model_best = SimpleClimateModel(fileload)
-        model_best.runModel()
-    
-        # Read in temperature change output (from simple climate model)
-        # .dat file format
-        #fileload = get_example_data_file_path(
-        #    'TempChange.dat', data_dir='trad_climate_model_output')
+        model = SimpleClimateModel(fileload)
+        x_model, y_model = model.runModel()
 
-        # .json file format
-        fileload = get_example_data_file_path(
-            'TempChange.json', data_dir='trad_climate_model_output')
+        # Add the temperature shift
+        y_model = y_model + params[0]
 
-        #data_scm_best = load_scm_temp(fileload)
-        data_scm_best = loadj_scm_temp(fileload)
-        
-        # Add the shift
-        x_model, y_model = data_scm_best.year, data_scm_best.temp + params[0]
-
-        return x_model.iloc[:].values, y_model.iloc[:].values
-
+        return x_model, y_model
 
     def log_lh(self, params):
         """
@@ -291,37 +280,21 @@ class ModifiedSimpleClimateModel(Model):
             params (array): Parameters for the simple climate model,
 	    contain subset (in order) of the following parameters:
                 -shift: Overall shift of the temperature curve output by SCM
-                -CO2_norm: Normalization for CO2 emissions
-                -CH4_norm:       "        "  CH4     "
-                -N2O_norm:       "        "  N2O     " 
-                -SOx_norm:       "        "  SOx     "
 
         Returns:
             chisq: Sum of ((y_data - y_model)/y_err)**2 
         """
         shift = params
     
-        # Run simple climate model and save output
-        fileload = get_example_data_file_path(
-            'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
-        model = SimpleClimateModel(fileload)
-        model.runModel()
+        # Run simple climate model
+        model = SimpleClimateModel(self.fileload_scm)
+        x_scm, y_scm = model.runModel()
 
-        # Read in temperature change output (from simple climate model)
-        # .dat format
-        #fileload = get_example_data_file_path(
-        #    'TempChange.dat', data_dir='trad_climate_model_output')
-
-        # .json format
-        fileload = get_example_data_file_path(
-            'TempChange.json', data_dir='trad_climate_model_output')
-        data_scm = loadj_scm_temp(fileload)
-        x_scm, y_scm = data_scm.year, data_scm.temp
 
         # Select years from data and scm to compare
         wh_scm = np.where((x_scm >= np.min(self.x)) & (x_scm <= np.max(self.x)))
-        x_scm = x_scm.iloc[:].values[wh_scm]
-        y_scm = y_scm.iloc[:].values[wh_scm] + shift
+        x_scm = x_scm[wh_scm]#x_scm.iloc[:].values[wh_scm]
+        y_scm = y_scm[wh_scm] + shift#y_scm.iloc[:].values[wh_scm] + shift
     
         # Compute chisq and return
         chisq = np.sum(((self.y - y_scm)/self.yerr)**2)
