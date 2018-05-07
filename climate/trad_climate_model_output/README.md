@@ -1,5 +1,7 @@
 The data in this directory are results of SimpleClimateModel().runModel()
-from the pySCM package.  The output files are:
+from the pySCM package.  The option to save output can be turned on by setting
+save_output=True as an argument of SimpleClimateModel.runModel()
+The output files are:
     SeaLevelChange.dat: Columns are 'years' and 'sea level due to changes in
                         global mean surface temperatures'
     TempChange.dat: Columns are 'years' and 'changes in mean surface temperature
