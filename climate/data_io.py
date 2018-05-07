@@ -143,3 +143,33 @@ def add_in_quad(arr):
 
     return np.sqrt(np.sum(arr**2))
     
+
+def load_data_d_sunspot(data_file):
+    """Import (daily) sunspot data from location data_file.
+
+    Args:
+        data_file (str): Location of data to be imported.
+
+    Returns:
+        data: Pandas data frame.
+
+    """
+    data = pd.read_csv(data_file, sep='\s+', header=None)
+    data.columns = ["year", "month", "day", "decimal_date",
+                    "daily_sunspot_number", "stdev", "number_of_obs"]
+    return data
+
+
+def load_data_y_sunspot(data_file):
+    """Import (yearly) sunspot data from location data_file.
+
+    Args:
+        data_file (str): Location of data to be imported.
+
+    Returns:
+        data: Pandas data frame.
+
+    """
+    data = pd.read_csv(data_file, sep='\s+', header=None)
+    data.columns = ["year","yearly_sunspot_number", "stdev", "number_of_obs"]
+    return data
