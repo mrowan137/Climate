@@ -1,0 +1,35 @@
+Yearly mean total sunspot number
+Time range: 1700 - last elapsed year
+
+Data description:
+Yearly mean total sunspot number obtained by taking a simple arithmetic mean of the daily total sunspot number over all days of each year. (NB: in early years in particular before 1749, the means are computed on only a fraction of the days in each year because on many days, no observation is available).
+
+Error values:
+The yearly standard deviation of individual data is derived from the daily values by the same formula as the monthly means:
+sigma(m)=sqrt(SUM(N(d)*sigma(d)^2)/SUM(N(d)))
+where sigma(d) is the standard deviation for a single day and N(d) is the
+number of observations for that day.
+
+The standard error on the yearly mean values can be computed by:
+sigma/sqrt(N) where sigma is the listed standard deviation and N the total number of observations in the year.
+NB: this standard error gives a measure of the precision, i.e. the sensitivity of the yearly value to different samples of daily values with random errors. The uncertainty on the mean (absolute accuracy) is only determined on longer time scales, and is thus not given here for individual yearly values.
+
+-------------------------------------------------------------------------------
+TXT
+-------------------------------------------------------------------------------
+Filename: SN_y_tot_V2.0.txt
+Format: plain ASCII text
+
+Contents:
+Column 1: Gregorian calendar year (mid-year date)
+Column 2: Yearly mean total sunspot number.
+Column 3: Yearly mean standard deviation of the input sunspot numbers from individual stations.
+Column 4: Number of observations used to compute the yearly mean total sunspot number.
+Column 5: Definitive/provisional marker. A blank indicates that the value is definitive. A '*' symbol indicates that the yearly average still contains provisional daily values and is subject to a possible revision.
+
+Line format [character position]:
+- [1-6] Year (decimal)
+- [9-13] Yearly mean total sunspot number
+- [15-19] Standard deviation
+- [22-26] Number of observations
+- [28] Definitive/provisional indicator
