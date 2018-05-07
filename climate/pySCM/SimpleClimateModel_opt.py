@@ -80,7 +80,7 @@ class SimpleClimateModel:
         The file containing the emissions should be in a certain format.
         Please refer to the example file (*EmissionsForSCM.dat*) for details.
     '''
-    def __init__(self, Filename, theta):
+    def __init__(self, Filename):
         '''
         This is the constructor of the class. By calling the constructor, the emissions will be read from file 
         (filling the EmissionRec) and the parameters will be read from the parameter file.
@@ -88,10 +88,10 @@ class SimpleClimateModel:
         '''
         #print("A simple climate model was born")
         # get emissions normalizations
-        self.CO2_norm = theta[1]
-        self.CH4_norm = theta[2]
-        self.N2O_norm = theta[3]
-        self.SOx_norm = theta[4]
+        #self.CO2_norm = theta[1]
+        #self.CH4_norm = theta[2]
+        #self.N2O_norm = theta[3]
+        #self.SOx_norm = theta[4]
         
         self._ReadParameters(Filename)
         # get start and end year of simulation
@@ -352,13 +352,13 @@ class SimpleClimateModel:
             interpolVal = np.interp(x, xp, fp)
             inds2 = range(len(interpolVal))
             if (k == 'CO2'):
-                returnval[k][inds2] = interpolVal*self.CO2_norm
+                returnval[k][inds2] = interpolVal#*self.CO2_norm
             elif (k == 'CH4'):
-                returnval[k][inds2] = interpolVal*self.CH4_norm
+                returnval[k][inds2] = interpolVal#*self.CH4_norm
             elif (k == 'N2O'):
-                returnval[k][inds2] = interpolVal*self.N2O_norm
+                returnval[k][inds2] = interpolVal#*self.N2O_norm
             elif (k == 'SOx'):
-                returnval[k][inds2] = interpolVal*self.SOx_norm
+                returnval[k][inds2] = interpolVal#*self.SOx_norm
         
         return returnval
     

@@ -161,14 +161,22 @@ class Model:
         """  
    
         # Plot and check for burn in time
-        fig, ax = plt.subplots(self.ndim, figsize=(10,10))
+        fig, ax = plt.subplots(self.ndim, figsize=(10,self.ndim*2.))
         plt.subplots_adjust(hspace=0.5)
-        for i in range(self.ndim):
-            ax[i].set(ylabel="Parameter %d"%i)
-    
-        for i in range(self.ndim):
-            sns.distplot(self.samples[:,i], ax=ax[i])
-        plt.show()
+        try:
+            for i in range(self.ndim):
+                ax[i].set(ylabel="Parameter %d"%i)
+                sns.distplot(self.samples[:,i], ax=ax[i])
+
+            plt.show()
+                
+        except TypeError:
+            for i in range(self.ndim):
+                ax.set(ylabel="Parameter %d"%i)    
+                sns.distplot(self.samples[:,i], ax=ax)
+
+            plt.show()
+            
 
         # Store the samples in a dataframe
         index = [i for i in range(len(self.samples[:,0]))]
@@ -234,7 +242,7 @@ class ModifiedSimpleClimateModel(Model):
         """
         Calls constructor for Model base class
         """        
-        super().__init__(5, x, y, yerr)
+        super().__init__(1, x, y, yerr)
 
 
     def __call__(self, *params):
@@ -254,8 +262,7 @@ class ModifiedSimpleClimateModel(Model):
         # Run simple climate model
         fileload = get_example_data_file_path(
             'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
-        model_best = SimpleClimateModel(
-            fileload, [params[i] for i in range(len(params))])
+        model_best = SimpleClimateModel(fileload)
         model_best.runModel()
     
         # Read in temperature change output (from simple climate model)
@@ -292,12 +299,12 @@ class ModifiedSimpleClimateModel(Model):
         Returns:
             chisq: Sum of ((y_data - y_model)/y_err)**2 
         """
-        shift, CO2_norm, CH4_norm, N2O_norm, SOx_norm = params
+        shift = params
     
         # Run simple climate model and save output
         fileload = get_example_data_file_path(
             'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
-        model = SimpleClimateModel(fileload, [shift, CO2_norm, CH4_norm, N2O_norm, SOx_norm])
+        model = SimpleClimateModel(fileload)
         model.runModel()
 
         # Read in temperature change output (from simple climate model)
@@ -335,8 +342,7 @@ class ModifiedSimpleClimateModel_gp(Model):
         fileload = get_example_data_file_path(
             'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
         # default initialization
-        self.model = SimpleClimateModel(
-            fileload, [0,1,1,1,1])
+        self.model = SimpleClimateModel(fileload)
         
 
     def __call__(self, params):
@@ -361,10 +367,6 @@ class ModifiedSimpleClimateModel_gp(Model):
             params (array): Parameters for the simple climate model,
 	    contain subset (in order) of the following parameters:
                 -shift: Overall shift of the temperature curve output by SCM
-                -CO2_norm: Normalization for CO2 emissions
-                -CH4_norm:       "        "  CH4     "
-                -N2O_norm:       "        "  N2O     " 
-                -SOx_norm:       "        "  SOx     "
 
         Returns:
             chisq: Sum of ((y_data - y_model)/y_err)**2 
@@ -942,3 +944,6 @@ class GPRInterpolator(Model):
         plt.title('Model Fit to Data');
         plt.legend()
         plt.show()
+
+
+        
