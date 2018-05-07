@@ -12,10 +12,6 @@ class TestIo(TestCase):
             'global_surface_temp_seaice_air_infer.txt'))
         assert data.year[0] == 1850
 
-        data_scm = loadj_scm_temp(get_example_data_file_path(
-            'TempChange.json', data_dir='trad_climate_model_output'))
-        print(data_scm.year[0])
-        assert data_scm.year[0] == 1850
         
 if __name__ == '__main__':
     unittest.main()

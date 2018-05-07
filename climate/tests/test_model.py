@@ -24,12 +24,12 @@ class TestModel(TestCase):
 
         # Set priors
         prior_type = ['uniform' for i in range(5) ]
-        prior_param1 = [-0.5, 0.7, 0.7, 0.7, 0.7]
-        prior_param2 = [0.5, 1.3, 1.3, 1.3, 1.3]
+        prior_param1 = [-0.5]
+        prior_param2 = [0.5]
         SCM_generate.set_priors(prior_type, prior_param1, prior_param2)
         
         # Generate dataset
-        x_generated, y_generated = SCM_generate([ 0.0, 1.0, 1.0, 1.0, 1.0])
+        x_generated, y_generated = SCM_generate([ 0.0])
         wh_past = np.where(x_generated <= 2018)
         x_generated = x_generated[wh_past]
         y_generated = y_generated[wh_past]
@@ -41,13 +41,13 @@ class TestModel(TestCase):
         SCM_test = model.ModifiedSimpleClimateModel(x, y_generated, yerr_generated)
         
         # Set priors
-        prior_type = ['uniform' for i in range(5) ]
-        prior_param1 = [-0.5, 0.7, 0.7, 0.7, 0.7]
-        prior_param2 = [0.5, 1.3, 1.3, 1.3, 1.3]
+        prior_type = ['uniform' for i in range(1) ]
+        prior_param1 = [-0.5]
+        prior_param2 = [0.5]
         SCM_test.set_priors(prior_type, prior_param1, prior_param2)
 
         # Run MCMC with initial guess far from true value
-        SCM_test.run_MCMC( param_guess=[0.3, 1.2, 1.1, 0.71, 0.8], nwalkers=10, nsteps=400)
+        SCM_test.run_MCMC( param_guess=[0.3], nwalkers=10, nsteps=400)
         SCM_test.show_results(burnin=100)
         
         print('Check that parameter result is consisitent with 0.0 shift and 1.0',
@@ -65,18 +65,18 @@ class TestModel(TestCase):
         yerr = yerr.values[0::12]
         
         # Get solar data
-        fileload = get_example_data_file_path(
-            'flare-index_total_*.txt', data_dir='data/flares')
-        data_flares = load_data_flare(fileload, verbose=0)
+        fileload = data_io.get_example_data_file_path(
+            'SN_y_tot_V2.0.txt', data_dir='data/sunspots')
+        data_sunspots = data_io.load_data_y_sunspot(fileload)
         
         # Get np.arrays for data series
-        years_flares = data_flares['years'].values
-        flares = data_flares['flares_index_mean'].values
-        flares_unc = data_flares['flares_index_unc'].values
-
+        years_sunspots = np.floor(data_sunspots['year'].values[118::])
+        sunspots = data_sunspots['yearly_sunspot_number'].values[118::]
+        sunspots_unc = data_sunspots['stdev'].values[118::]
+        
         # Generate dataset from model of known parameters
         # Create instance of ModifiedSimpleClimateModel
-        CSM_generate = model.BasicCloudSeedingModel(x, y, yerr, years_flares, flares, flares_unc)
+        CSM_generate = model.BasicCloudSeedingModel(x, y, yerr, years_sunspots, sunspots, sunspots_unc)
 
         # Set priors
         prior_type = ['uniform' for i in range(2) ]
@@ -94,7 +94,7 @@ class TestModel(TestCase):
 
         
         # Create new model and fit it to the dataset        
-        CSM_test = model.BasicCloudSeedingModel(x_generated, y_generated, yerr_generated, years_flares, flares, flares_unc)
+        CSM_test = model.BasicCloudSeedingModel(x_generated, y_generated, yerr_generated, years_sunspots, sunspots, sunspots_unc)
 
         # Set priors
         prior_type = ['uniform' for i in range(2) ]
