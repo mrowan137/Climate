@@ -173,3 +173,90 @@ def load_data_y_sunspot(data_file):
     data = pd.read_csv(data_file, sep='\s+', header=None)
     data.columns = ["year","yearly_sunspot_number", "stdev", "number_of_obs"]
     return data
+
+
+def load_data_emissions(fileload):
+        '''
+        Repeat of _ReadEmissions in SimpleClimateModel_opt.py, for loading data
+        outside of the class.
+        |CO2|, |CH4|, |N2O| and |SOx| emissions will be read from file. The input 
+        file (Filename) has to be in a certain format.  Please refer to the 
+        example file: EmissionsForSCM.dat. If there are missing values, this 
+        function will interpolate the values so that the emissions are available 
+        for the whole time period from startYr to endYr of the simulation.
+        
+	    :param Filename: path and filename of the emissions file.
+        :type: string
+        :returns: nothing
+        '''
+
+        # Get timerange of emissions curves from SCM parameter file
+        fileload_param = get_example_data_file_path(
+            'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
+        reader = open(fileload_param,'r')
+        
+        parameters = dict()
+        for line in reader:
+            pos = line.find('=')
+            if (pos > 1):
+                tag = line[0:pos]
+                value = line[pos+1:].strip()
+                parameters[tag] = value
+        reader.close()
+
+        startYr = int(get_parameter(parameters,'Start year'))
+        endYr = int(get_parameter(parameters, 'End year'))
+        
+        # create empty list
+        returnval = {}
+        yrs = range(endYr-startYr+1)
+        returnval['SOx']=np.zeros(len(yrs))*np.nan
+        returnval['CH4']=np.zeros(len(yrs))*np.nan
+        returnval['N2O']=np.zeros(len(yrs))*np.nan
+        returnval['CO2']=np.zeros(len(yrs))*np.nan
+
+        # read data
+        table = np.loadtxt(fileload, skiprows=3)
+
+        inds = (table[:,0] - startYr).astype(int)
+        returnval['CO2'][inds] = table[:,1]
+        returnval['CH4'][inds] = table[:,2]
+        returnval['N2O'][inds] = table[:,3]
+        returnval['SOx'][inds] = table[:,4]
+
+        # now you should have all data for one species
+        # interpolate missing values
+        
+        for k, v in returnval.items():
+            x = np.arange(0,len(yrs))
+            xp_hold = np.where(~np.isnan(returnval[k]))[0]
+            xp = np.zeros(len(xp_hold)+1)
+            xp[1:len(xp)] = xp_hold[0:len(xp_hold)]
+            
+            fp_hold = returnval[k][np.where(~np.isnan(returnval[k]))[0]]
+            fp = np.zeros(len(fp_hold)+1)
+            fp[1:len(fp)] = fp_hold[0:len(fp_hold)]
+    
+            interpolVal = np.interp(x, xp, fp)
+            inds2 = range(len(interpolVal))
+            if (k == 'CO2'):
+                returnval[k][inds2] = interpolVal
+            elif (k == 'CH4'):
+                returnval[k][inds2] = interpolVal
+            elif (k == 'N2O'):
+                returnval[k][inds2] = interpolVal
+            elif (k == 'SOx'):
+                returnval[k][inds2] = interpolVal
+        
+        return returnval
+
+def get_parameter(params, key):
+    '''
+    Return the value (parameter) corresponding to the key provided.
+    '''
+    try:
+        result = params[key]
+    except KeyError:
+        result = None
+            
+    return result
