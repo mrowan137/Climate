@@ -10,7 +10,7 @@ import george
 from george import kernels
 import scipy.optimize as op
 
-"""Demonstrate high quality docstrings.
+"""
 This module contains several classes that are used to define different climate 
 models (listed below):
     -Model(): Base model containing initialization and functions that are common
@@ -89,7 +89,6 @@ class Model:
         Returns:
             log of prior of all parameters
         """
-
         priors_eval = [ self.priors[i](params[i]) for i in range(self.ndim) ]
         return np.sum(priors_eval)    
 
@@ -127,15 +126,17 @@ class Model:
         """
         
         # Randomize starting positions of walkers around initial guess
+        #starting_positions = param_guess
+        #param_guess_flat = [p for v in param_guess for p in v]
         starting_positions = [
-            param_guess + 1e-4 * np.random.randn(self.ndim) for i in range(nwalkers)
+            np.array(param_guess) + 1e-4 * np.random.randn(self.ndim) for i in range(nwalkers)
         ]
 
         # Set up the sampler object
         sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.log_post, args=())
 
         # Progress bar
-        width = 80
+        width = 100
         for i, result in enumerate(sampler.sample(starting_positions, iterations=nsteps)):
             n = int((width+1) * float(i) / nsteps)
             if (i == 0):
@@ -149,10 +150,11 @@ class Model:
 
         # return the samples for later output
         self.samples = sampler.flatchain
+        self.sampler = sampler
         return self.samples
 
 
-    def show_results(self, burnin):
+    def show_results(self, burnin, params_to_plot):
         """
         Displays results from self.sample
     
@@ -161,22 +163,19 @@ class Model:
         """  
    
         # Plot and check for burn in time
-        fig, ax = plt.subplots(self.ndim, figsize=(10,self.ndim*2.))
+        fig, ax = plt.subplots(2*len(params_to_plot),
+                               figsize=(10,len(params_to_plot)*3.))
         plt.subplots_adjust(hspace=0.5)
-        try:
-            for i in range(self.ndim):
-                ax[i].set(ylabel="Parameter %d"%i)
-                sns.distplot(self.samples[:,i], ax=ax[i])
+        for i,k in enumerate(params_to_plot):
+            ax[2*i].set(ylabel="Parameter %d"%k)
+            ax[2*i+1].set(ylabel="Parameter %d"%k)
+            sns.distplot(self.samples[:,k], ax=ax[2*i])
+            for j in range(10):
+                sns.tsplot(self.sampler.chain[j,:,i], ax=ax[2*i+1])
 
-            plt.show()
+        plt.show()
                 
-        except TypeError:
-            for i in range(self.ndim):
-                ax.set(ylabel="Parameter %d"%i)    
-                sns.distplot(self.samples[:,i], ax=ax)
 
-            plt.show()
-            
 
         # Store the samples in a dataframe
         index = [i for i in range(len(self.samples[:,0]))]
@@ -185,7 +184,7 @@ class Model:
 
         # Compute and print the MAP values
         q = samples_df.quantile([0.16, 0.50, 0.84], axis=0)
-        for i in range(self.ndim):
+        for i in params_to_plot:
             print("Param {:.0f} = {:.6f} + {:.6f} - {:.6f}".format( i, 
             q['p'+str(i)][0.50], q['p'+str(i)][0.84] - q['p'+str(i)][0.50], q['p'+str(i)][0.50] - q['p'+str(i)][0.16]))
 
@@ -244,28 +243,38 @@ class ModifiedSimpleClimateModel(Model):
         """
         self.fileload_scm = get_example_data_file_path(
             'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
-        super().__init__(1, x, y, yerr)
+        self.model = SimpleClimateModel(self.fileload_scm)
+        
+        # number of dimensions for this model is 1 + 4*(number of emissions pts)
+        super().__init__(1+4*len(self.model.emissions['CO2']), x, y, yerr)
+
+        # set selection indices for the different gases
+        self.sel_CO2 = [1 + i for i in range(len(self.model.emissions['CO2']))]
+        self.sel_N2O = [1 + i + self.sel_CO2[-1] for i in range(len(self.model.emissions['N2O']))]
+        self.sel_CH4 = [1 + i + self.sel_N2O[-1] for i in range(len(self.model.emissions['CH4']))]
+        self.sel_SOx = [1 + i + self.sel_CH4[-1] for i in range(len(self.model.emissions['SOx']))]
 
 
-    def __call__(self, *params):
+    def __call__(self, params):
         """
         Evaluate the model for input parameters
 
         Returns x and y series for model prediction
         """
-
-        # Use global parameters (assume set by show_results) if none input
-        #if (len(params) == 0):
-        #    params = self.params
-
+        
+        
         if isinstance(params, tuple):
             params = params[0]
 
+
+        # Set the gas emissions
+        ems_CO2 = np.array(params)[self.sel_CO2]#params[1]
+        ems_N2O = np.array(params)[self.sel_N2O]#params[2]
+        ems_CH4 = np.array(params)[self.sel_CH4]#params[3]
+        ems_SOx = np.array(params)[self.sel_SOx]#params[4]
+        
         # Run simple climate model
-        fileload = get_example_data_file_path(
-            'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
-        model = SimpleClimateModel(fileload)
-        x_model, y_model = model.runModel()
+        x_model, y_model = self.model.runModel(ems_CO2, ems_N2O, ems_CH4, ems_SOx)
 
         # Add the temperature shift
         y_model = y_model + params[0]
@@ -284,17 +293,13 @@ class ModifiedSimpleClimateModel(Model):
         Returns:
             chisq: Sum of ((y_data - y_model)/y_err)**2 
         """
-        shift = params
-    
         # Run simple climate model
-        model = SimpleClimateModel(self.fileload_scm)
-        x_scm, y_scm = model.runModel()
-
+        x_scm, y_scm = self.__call__(params)
 
         # Select years from data and scm to compare
         wh_scm = np.where((x_scm >= np.min(self.x)) & (x_scm <= np.max(self.x)))
-        x_scm = x_scm[wh_scm]#x_scm.iloc[:].values[wh_scm]
-        y_scm = y_scm[wh_scm] + shift#y_scm.iloc[:].values[wh_scm] + shift
+        x_scm = x_scm[wh_scm]
+        y_scm = y_scm[wh_scm]
     
         # Compute chisq and return
         chisq = np.sum(((self.y - y_scm)/self.yerr)**2)
