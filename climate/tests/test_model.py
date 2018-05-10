@@ -7,8 +7,14 @@ import unittest
 from unittest import TestCase
 
 
+
 class TestModel(TestCase):
     def test_ModifiedSimpleClimateModel(self):
+        # Load emissions data
+        fileload = get_example_data_file_path('EmissionsForSCM.dat', data_dir='pySCM')
+        ems = load_data_emissions(fileload)
+
+        # Load temperature
         data = load_data_temp(get_example_data_file_path(
             'global_surface_temp_seaice_air_infer.txt'))
         x, y, yerr = data['year'], data['monthly_anomaly'], data['monthly_anomaly_unc']
@@ -23,14 +29,18 @@ class TestModel(TestCase):
         SCM_generate = model.ModifiedSimpleClimateModel(x, y, yerr)
 
         # Set priors
-        prior_type = ['uniform' for i in range(5) ]
-        prior_param1 = [-0.5]
-        prior_param2 = [0.5]
+        prior_type = ['uniform' for i in range(SCM_generate.ndim) ]
+        prior_param1 = [-0.5]*SCM_generate.ndim
+        prior_param2 = [0.5]*SCM_generate.ndim
         SCM_generate.set_priors(prior_type, prior_param1, prior_param2)
         
         # Generate dataset
-        x_generated, y_generated = SCM_generate([ 0.0])
-        wh_past = np.where(x_generated <= 2018)
+        x_generated, y_generated = SCM_generate([0.0]
+                                                +[el for el in ems['CO2']]
+                                                +[el for el in ems['N2O']]
+                                                +[el for el in ems['CH4']]
+                                                +[el for el in ems['SOx']])
+        wh_past = np.where((x_generated <= 2018))
         x_generated = x_generated[wh_past]
         y_generated = y_generated[wh_past]
         y_generated = y_generated + [ random.normal(scale=0.2) for i in range(len(y_generated)) ]
@@ -41,14 +51,20 @@ class TestModel(TestCase):
         SCM_test = model.ModifiedSimpleClimateModel(x, y_generated, yerr_generated)
         
         # Set priors
-        prior_type = ['uniform' for i in range(1) ]
-        prior_param1 = [-0.5]
-        prior_param2 = [0.5]
+        prior_type = ['uniform' for i in range(SCM_test.ndim) ]
+        prior_param1 = [-0.5]*SCM_test.ndim
+        prior_param2 = [0.5]*SCM_test.ndim
         SCM_test.set_priors(prior_type, prior_param1, prior_param2)
 
         # Run MCMC with initial guess far from true value
-        SCM_test.run_MCMC( param_guess=[0.3], nwalkers=10, nsteps=400)
-        SCM_test.show_results(burnin=100)
+        param_guess = ([0.3]
+                       +[el for el in ems['CO2']]
+                       +[el for el in ems['N2O']]
+                       +[el for el in ems['CH4']]
+                       +[el for el in ems['SOx']])
+        SCM_test.run_MCMC( param_guess=[0.3],
+                           nwalkers=2*SCM_test.ndim, nsteps=10)
+        SCM_test.show_results(burnin=1,params_to_plot=[0])
         
         print('Check that parameter result is consisitent with 0.0 shift')
 
@@ -104,7 +120,7 @@ class TestModel(TestCase):
         
         # Run MCMC with initial guess far from true value
         CSM_test.run_MCMC( param_guess=[0.05, 2.2], nwalkers=10, nsteps=400)
-        CSM_test.show_results(burnin=100)
+        CSM_test.show_results(burnin=100,params_to_plot=[0,1])
 
         print('Check that parameter result is consisitent with 0.35, 1.0') 
     
