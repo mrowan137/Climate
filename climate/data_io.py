@@ -209,16 +209,17 @@ def load_data_emissions(fileload):
         
         # create empty list
         returnval = {}
-        yrs = range(endYr-startYr+1)
+        the_future = 2100
+        yrs = range(the_future-startYr+1)
         returnval['SOx']=np.zeros(len(yrs))*np.nan
         returnval['CH4']=np.zeros(len(yrs))*np.nan
         returnval['N2O']=np.zeros(len(yrs))*np.nan
         returnval['CO2']=np.zeros(len(yrs))*np.nan
 
         # read data
-        table = np.loadtxt(fileload, skiprows=3)
-
+        table = np.loadtxt(fileload, skiprows=3)        
         inds = (table[:,0] - startYr).astype(int)
+
         returnval['CO2'][inds] = table[:,1]
         returnval['CH4'][inds] = table[:,2]
         returnval['N2O'][inds] = table[:,3]
@@ -239,15 +240,20 @@ def load_data_emissions(fileload):
     
             interpolVal = np.interp(x, xp, fp)
             inds2 = range(len(interpolVal))
+            inds3 = (np.arange(startYr,endYr+1)-startYr).astype(int)
             if (k == 'CO2'):
                 returnval[k][inds2] = interpolVal
+                returnval[k] = returnval[k][inds3]
             elif (k == 'CH4'):
                 returnval[k][inds2] = interpolVal
+                returnval[k] = returnval[k][inds3]
             elif (k == 'N2O'):
                 returnval[k][inds2] = interpolVal
+                returnval[k] = returnval[k][inds3]
             elif (k == 'SOx'):
                 returnval[k][inds2] = interpolVal
-        
+                returnval[k] = returnval[k][inds3]
+
         return returnval
 
 def get_parameter(params, key):
