@@ -128,7 +128,7 @@ class SimpleClimateModel:
         #print(CO2ems.zadd([1,2,3], [1,2], [3,4], 1000))
 
     
-    def runModel(self, RadForcingFlag = False, save_output=False):
+    def runModel(self, ems_CO2, ems_N2O, ems_CH4, ems_SOx, RadForcingFlag = False, save_output=False):
         ''' 
         This function runs the simple climate model. A number of private functions will be called but also a number of
         'independent' functions (detailed below). The model takes the atmosheric GHG emissions as input, converts them
@@ -147,9 +147,16 @@ class SimpleClimateModel:
         :param: RadForcingFlag (bool) which is set to 'False' by default. If it is set to 'True' the function returns the calculated radiative forcing.
         :returns: This function returns the radiative forcing (numpy.array) if the flag was set to true. Otherwise, nothing will be returned.
         '''
+        
+        # Set the emissions
+        self.emissions['CO2'] = ems_CO2
+        self.emissions['N2O'] = ems_N2O
+        self.emissions['CH4'] = ems_CH4
+        self.emissions['SOx'] = ems_SOx
+        
         simYears =  int(self._GetParameter('Years to evaluate response functions'))
         oceanMLDepth = float(self._GetParameter('Ocean mixed layer depth [in meters]'))
-
+        
         #start_time = timeit.default_timer()
         self.CO2Concs = CO2EmissionsToConcs(self.emissions, simYears, oceanMLDepth)
         #elapsed = timeit.default_timer() - start_time
@@ -322,7 +329,8 @@ class SimpleClimateModel:
         # create empty list
         #returnval = []
         returnval = {}
-        yrs = range(self.endYr-self.startYr+1)
+        the_future = 2100
+        yrs = range(the_future-self.startYr+1)
         returnval['SOx']=np.zeros(len(yrs))*np.nan
         returnval['CH4']=np.zeros(len(yrs))*np.nan
         returnval['N2O']=np.zeros(len(yrs))*np.nan
@@ -357,14 +365,20 @@ class SimpleClimateModel:
     
             interpolVal = np.interp(x, xp, fp)
             inds2 = range(len(interpolVal))
+            inds3 = (np.arange(self.startYr,self.endYr+1)-self.startYr).astype(int)
+            
             if (k == 'CO2'):
-                returnval[k][inds2] = interpolVal#*self.CO2_norm
+                returnval[k][inds2] = interpolVal
+                returnval[k] = returnval[k][inds3]
             elif (k == 'CH4'):
-                returnval[k][inds2] = interpolVal#*self.CH4_norm
+                returnval[k][inds2] = interpolVal
+                returnval[k] = returnval[k][inds3]
             elif (k == 'N2O'):
-                returnval[k][inds2] = interpolVal#*self.N2O_norm
+                returnval[k][inds2] = interpolVal
+                returnval[k] = returnval[k][inds3]
             elif (k == 'SOx'):
-                returnval[k][inds2] = interpolVal#*self.SOx_norm
+                returnval[k][inds2] = interpolVal
+                returnval[k] = returnval[k][inds3]
         
         return returnval
     
