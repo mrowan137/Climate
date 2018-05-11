@@ -51,6 +51,7 @@ class Model:
         self.x = x
         self.y = y
         self.yerr = yerr
+        
         # Create an array of ndim Priors
         self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
 
@@ -75,6 +76,8 @@ class Model:
                 self.priors[i] = prior.LogJefferysPrior(param1[i], param2[i])
             elif (prior_type[i] == 'poisson'):
                 self.priors[i] = prior.LogPoissonPrior(param1[i])
+            elif (prior_type[i] == 'exponentialdecay'):
+                self.priors[i] = prior.LogExponentialDecayPrior(param1[i])
             else:
                 print("Invalid prior option. Modify inputs and try again.")
 
@@ -126,10 +129,8 @@ class Model:
         """
         
         # Randomize starting positions of walkers around initial guess
-        #starting_positions = param_guess
-        #param_guess_flat = [p for v in param_guess for p in v]
         starting_positions = [
-            np.array(param_guess) + 1e-4 * np.random.randn(self.ndim) for i in range(nwalkers)
+            np.array(param_guess) + 1e-2 * np.random.randn(self.ndim) for i in range(nwalkers)
         ]
 
         # Set up the sampler object
@@ -145,8 +146,6 @@ class Model:
             print("\r[{0}{1}]".format('#' * n, ' ' * (width - n)), end='')
 
         print(os.linesep)
-        # Run the sampler
-        #sampler.run_mcmc(starting_positions, nsteps)
 
         # return the samples for later output
         self.samples = sampler.flatchain
@@ -161,21 +160,27 @@ class Model:
         Args:
             burnin (int): Burn in time to trim the samples
         """  
-   
-        # Plot and check for burn in time
+        
+        # Modify self.samples for burn-in
+        self.samples = self.sampler.chain[:, burnin:, :].reshape((-1, self.ndim))
+
+        # Get number walkers and number of iterations
+        nwalkers = self.sampler.chain.shape[0]
+        nit = self.sampler.chain.shape[1]
+
+        # Plot the traces and marginalized distributions for desired parameters
         fig, ax = plt.subplots(2*len(params_to_plot),
                                figsize=(10,len(params_to_plot)*3.))
         plt.subplots_adjust(hspace=0.5)
+
         for i,k in enumerate(params_to_plot):
             ax[2*i].set(ylabel="Parameter %d"%k)
             ax[2*i+1].set(ylabel="Parameter %d"%k)
             sns.distplot(self.samples[:,k], ax=ax[2*i])
-            for j in range(10):
-                sns.tsplot(self.sampler.chain[j,:,i], ax=ax[2*i+1])
 
+            for j in range(nwalkers):
+                ax[2*i+1].plot(np.linspace(1+burnin,nit,nit-burnin), self.sampler.chain[j,burnin:,i], "b", alpha=0.1)
         plt.show()
-                
-
 
         # Store the samples in a dataframe
         index = [i for i in range(len(self.samples[:,0]))]
@@ -211,6 +216,7 @@ class Model:
         plt.title('Model Fit to Data');
         plt.legend()
         plt.show()
+
 
     def get_samples(self):
         """
@@ -260,18 +266,16 @@ class ModifiedSimpleClimateModel(Model):
         Evaluate the model for input parameters
 
         Returns x and y series for model prediction
-        """
-        
+        """        
         
         if isinstance(params, tuple):
             params = params[0]
 
-
         # Set the gas emissions
-        ems_CO2 = np.array(params)[self.sel_CO2]#params[1]
-        ems_N2O = np.array(params)[self.sel_N2O]#params[2]
-        ems_CH4 = np.array(params)[self.sel_CH4]#params[3]
-        ems_SOx = np.array(params)[self.sel_SOx]#params[4]
+        ems_CO2 = np.array(params)[self.sel_CO2]
+        ems_N2O = np.array(params)[self.sel_N2O]
+        ems_CH4 = np.array(params)[self.sel_CH4]
+        ems_SOx = np.array(params)[self.sel_SOx]
         
         # Run simple climate model
         x_model, y_model = self.model.runModel(ems_CO2, ems_N2O, ems_CH4, ems_SOx)
@@ -280,6 +284,7 @@ class ModifiedSimpleClimateModel(Model):
         y_model = y_model + params[0]
 
         return x_model, y_model
+
 
     def log_lh(self, params):
         """
@@ -293,6 +298,7 @@ class ModifiedSimpleClimateModel(Model):
         Returns:
             chisq: Sum of ((y_data - y_model)/y_err)**2 
         """
+
         # Run simple climate model
         x_scm, y_scm = self.__call__(params)
 
@@ -307,70 +313,13 @@ class ModifiedSimpleClimateModel(Model):
         return constant - 0.5*chisq
 
     
-class ModifiedSimpleClimateModel_gp(Model):
-    """
-    Modified Simple Climate Model Class
-    """
-   
-    def __init__(self, x, y, yerr):
-        """
-        Calls constructor for Model base class
-        """        
-        super().__init__(5, x, y, yerr)
-        fileload = get_example_data_file_path(
-            'SimpleClimateModelParameterFile.txt', data_dir='pySCM')
-        # default initialization
-        self.model = SimpleClimateModel(fileload)
-        
 
-    def __call__(self, params):
-        """
-        Evaluate the model for input parameters
-
-        Returns x and y series for model prediction
-        """
-        #print("in SCM call, ",params)
-        # Run simple climate model
-        y_model = self.model.runModel_gp(params[1::]) + params[0]
-        x_model = self.model.yrs
-        
-        return x_model, y_model
-
-
-    def log_lh(self, params):
-        """
-        Computes log of Gaussian likelihood function
-
-        Args:
-            params (array): Parameters for the simple climate model,
-	    contain subset (in order) of the following parameters:
-                -shift: Overall shift of the temperature curve output by SCM
-
-        Returns:
-            chisq: Sum of ((y_data - y_model)/y_err)**2 
-        """
-    
-        # Run simple climate model and save output
-        y_scm = self.model.runModel_gp(params[1::])
-        x_scm = self.model.yrs
-        
-        # Select years from data and scm to compare
-        wh_scm = np.where((x_scm >= np.min(self.x)) & (x_scm <= np.max(self.x)))
-        x_scm = x_scm[wh_scm]
-        y_scm = y_scm[wh_scm] + params[0]
-    
-        # Compute chisq and return
-        chisq = np.sum(((self.y - y_scm)/self.yerr)**2)
-        constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*self.yerr**2)))
-        return constant - 0.5*chisq
-    
-    
 class BasicCloudSeedingModel(Model):
     """
     Basic model for cloud seeding. DT = p0 * a_{sun}(t-Dt)
     """
 
-    def __init__(self, x, y, yerr, solar_x, solar_y, solar_yerr):
+    def __init__(self, x, y, yerr, solar_x, solar_y, solar_yerr, tlagprec):
         """
         Initialize global variables of basic cloud seeding model
     
@@ -381,8 +330,9 @@ class BasicCloudSeedingModel(Model):
             solar_x (array): Data on solar activity (x)
             solar_y (array): Data on solar activity (y)
             solar_yerr (array): Uncertainty on solar activity data
+            tlagprec (int): factor increase in resolution on t_lag (from 1 year)
         """
-        
+
         # Set global variables
         self.ndim = 2
         self.x = x
@@ -391,37 +341,83 @@ class BasicCloudSeedingModel(Model):
         self.solar_x = solar_x
         self.solar_y = solar_y
         self.solar_yerr = solar_yerr
+        self.subdivisions = tlagprec
         self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
 
+        # Value of parameters after optimization
+        optpar = np.array([ -3.59865672e+03, 7.80363922e+01, 7.47410298e+00, -6.25627006e-01,
+                            -1.28588659e+02, 3.63549497e+00, 3.00857323e+00,  5.38667302e+02,
+                            -6.95411444e+02, 7.98969761e+00, 1.23748637e+00])
 
-    def __call__(self, *params):
+        # Set priors for GPR based off of optimized values       
+        prior_type = [ 'uniform' for i in range(11) ]
+        prior_param1 = optpar*0.5
+        prior_param2 = optpar*1.5
+        prior_type[5] = 'gaussian'
+        prior_param1[5] = np.log(11.0)
+        prior_param2[5] = 1.2 / 11.0
+    
+        # Initialize GPR, run MCMC, and show results
+        self.GPR = GPRInterpolator(solar_x, solar_y, solar_yerr, self.subdivisions)
+        self.GPR.set_priors(prior_type, prior_param1, prior_param2)
+        print("Running MCMC on GPR of Solar Data")
+        self.GPR.run_MCMC(22,400)
+        print("Generating Point Estimate of Gaussian Process Regression")
+        self.GPR.show_results(100)
+
+    
+    def get_model_prediction(self, params):
         """
         Evaluate the model for given params
-
-        Returns x and y series for model prediction
+        
+        Args:
+            params: can be *args from user or tuple from mcmc
+        
+        Returns:
+             x, y, and yerr series for model prediction
         """
 
-        # Use global parameters (assume set by run_mcmc) if none input
-        #if (len(params) == 0):
-        #    params = self.params
         if isinstance(params, tuple):
             alpha, dt = params[0]
         else:
             alpha, dt = params
-       
-        # Make t_lag discrete
-        dt = int(dt)
+
+        # Use explicit casting to avoid rounding errors
+        # Make parameter dt from emcee rounded to the nearest 1/subdivisions
+        dt = int(dt*self.subdivisions)
+        dt = np.array(dt/self.subdivisions).astype(np.float64)
+
+        self.x = self.x.astype(np.float64)
+        self.solar_x = self.solar_x.astype(np.float64)
 
         # Select years from data and seeding model to compare
-        wh_data = np.where((self.x >= np.min(self.solar_x) + dt)
-                         & (self.x <= np.max(self.solar_x) + dt))
-        wh_model = np.where((self.solar_x <= np.max(self.x) - dt)
-                         & (self.solar_x >= np.min(self.x) - dt))
+        wh_data = np.where((self.x >= np.min((self.solar_x+dt).astype(np.float32)))
+                         & (self.x <= np.max((self.solar_x+dt).astype(np.float32))))
 
-        x_model = self.x[wh_data]
-        y_model = alpha * self.solar_y[wh_model]
- 
+        x_model = self.x[wh_data] - dt
+        
+        # Get GPR prediction
+        x_model, y_model, yerr_model = self.GPR(x_model)
+        y_model = alpha * y_model
+
+        return x_model + dt, y_model, yerr_model
+
+
+    def __call__(self, params):
+        """
+        Evaluate the model for given params
+
+        Args:
+            params: can be *args from user or tuple from mcmc
+        
+        Returns:
+             x and y  series for model prediction
+        """
+
+        x_model, y_model, yerr_model = self.get_model_prediction(params)
+
         return x_model, y_model
+
 
     def log_lh(self, params):
         """
@@ -442,115 +438,39 @@ class BasicCloudSeedingModel(Model):
         else:
             alpha, dt = params
 
-        # Make t_lag discrete
-        dt = int(dt)
-                
         # Evaluate model at given point
-        x_model, y_model = self.__call__(params)
-       
+        x_model, y_model, yerr_model = self.get_model_prediction(params)
+        x_model = x_model.astype(np.float64)
 
         # Select years from data and seeding model to compare
-        wh_data = np.where((self.x >= np.min(self.solar_x) + dt)
-                         & (self.x <= np.max(self.solar_x) + dt))
-        wh_model = np.where((self.solar_x <= np.max(self.x) - dt)
-                         & (self.solar_x >= np.min(self.x) - dt))
+        wh_data = np.where((self.x.astype(np.float32) >= np.min(x_model.astype(np.float32)))
+                         & (self.x.astype(np.float32) <= np.max(x_model.astype(np.float32))))
 
         y_data = self.y[wh_data]
         yerr_data = self.yerr[wh_data]
-        yerr_model = self.solar_yerr[wh_model]
-        
+
         # Compute chisq and return
         chisq = np.sum( (y_data - y_model)**2 / (yerr_data**2 + alpha**2*yerr_model**2) )
-        constant = np.sum(np.log(1 / np.sqrt(2.0 * np.pi * (yerr_data**2 + alpha**2*yerr_model**2)) )) 
+        constant = np.sum(np.log(1 / np.sqrt(2.0 * np.pi * (yerr_data**2 + alpha**2*yerr_model**2)) ))
         return constant - 0.5*chisq
 
 
-class BasicCloudSeedingModel_gp(Model):
+
+class GPRInterpolator(Model):
     """
-    Basic model for cloud seeding. DT = p0 * a_{sun}(t-Dt)
+    Gaussian Process Regression for interpolating a data set with variable factor increase
+    in domain resolution
     """
 
-    def __init__(self, x, y, yerr, solar_x, solar_y, solar_yerr):
+    def __init__(self, x, y, yerr, subdivisions):
         """
-        Initialize global variables of basic cloud seeding model
+        Initialize global variables of Gaussian Process Regression Interpolator
     
         Args:
             x (array): Independent variable
             y (array): Dependent variable
             yerr (array): Uncertainty on y
-            solar_x (array): Data on solar activity (x)
-            solar_y (array): Data on solar activity (y)
-            solar_yerr (array): Uncertainty on solar activity data
-        """
-        
-        # Set global variables
-        self.ndim = 2
-        self.x = x
-        self.y = y
-        self.yerr = yerr
-        self.solar_x, self.solar_y, self.solar_yerr = self.GaussianProcessRegression(solar_x, solar_y, solar_yerr)
-        self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
-
-
-    def __call__(self, *params):
-        """
-        Evaluate the model for given params
-
-        Returns x and y series for model prediction
-        """
-
-        # Use global parameters (assume set by run_mcmc) if none input
-        #if (len(params) == 0):
-        #    params = self.params
-        if isinstance(params, tuple):
-            alpha, dt = params[0]
-        else:
-            alpha, dt = params
-       
-        # Make dt years with daily precision
-        dt = int(dt*365)
-        dt = float(dt)/365
-        
-        # Select years from data and seeding model to compare
-        wh_data = np.where((self.x >= np.min(self.solar_x) + dt)
-                         & (self.x <= np.max(self.solar_x) + dt))
-        
-        wh_model = np.where((self.solar_x <= np.max(self.x) - dt)
-                         & (self.solar_x >= np.min(self.x) - dt))
-        
-        #x_model = self.x[wh_data]
-        x_model = self.solar_x[wh_model]
-        y_model = alpha * self.solar_y[wh_model]
-        
-        #print(x_model[0], x_model[-1], len(x_model))
-        #print(y_model[0], y_model[-1], len(y_model))
-        # Take yearly values to compare to data
-        x_model = x_model[::365]
-        y_model = y_model[::365]
-        
-        if (dt>0):
-            x_model = x_model[:-1]
-            y_model = y_model[:-1]
-        if (dt<0):
-            x_model = x_model[1:]
-            y_model = y_model[1:]
-
-        return x_model, y_model
-
-
-    def GaussianProcessRegression(self, x, y, yerr):
-        """
-        Does Gaussian Process Regression on data for interpolation
-        
-        Args: 
-            x (array): times of solar flare index measurements
-            y (array): solar flare index
-            yerr (array): solar flare uncertainties
-
-        Returns: 
-            x_predict (array): interpolated times
-            y_predict (array): interpolated solar flare indices
-            yerr_predict (array): interpolated uncertainty      
+            subdivisions: The number of subdivisions between data points
         """
 
         # Define kernels
@@ -559,96 +479,165 @@ class BasicCloudSeedingModel_gp(Model):
         kernel_poly = 5**2 * kernels.RationalQuadraticKernel(log_alpha=np.log(.78), metric=1.2**2)
         kernel_extra = 5**2 * kernels.ExpSquaredKernel(1.6**2)
         kernel = kernel_expsq + kernel_periodic + kernel_poly + kernel_extra
-        
+
         # Create GP object
-        gp = george.GP(kernel, mean=np.mean(y), fit_mean=True)
-        gp.compute(x, yerr)
+        self.gp = george.GP(kernel, mean=np.mean(y), fit_mean=False)
+        self.gp.compute(x, yerr)
+
+        # Set global variables
+        self.ndim = len(self.gp)
+        self.x = x
+        self.y = y
+        self.yerr = yerr
+        self.subdivisions = subdivisions
+        self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ]
+        self.x_predict = np.linspace(min(self.x), max(self.x), subdivisions*(len(self.x)-1) + 1 )
+
+
+    def run_MCMC(self, nwalkers, nsteps):
+        """
+        Samples the posterior distribution via the affine-invariant ensemble 
+        sampling algorithm; plots are output to diagnose burn-in time; best-fit
+        parameters are printed; best-fit line is overplotted on data, with errors.
+    
+        Args:
+            nwalkers (int): Number of walkers for affine-invariant ensemble sampling;
+                            must be an even number
+            nsteps (int): Number of timesteps for which to run the algorithm
+
+
+        Returns:
+            Samples (array): Trajectories of the walkers through parameter spaces.
+                             This array has dimension (nwalkers) x (nsteps) x (ndim)
+        """
 
         # Define objective function to optimize (log-likelihood)
         def nll(p):
-            gp.set_parameter_vector(p)
-            ll = gp.lnlikelihood(y, quiet=True)
+            self.gp.set_parameter_vector(p)
+            ll = self.gp.lnlikelihood(self.y, quiet=True)
             return -ll if np.isfinite(ll) else 1e25
 
         # Define gradient of objective function
         def grad_nll(p):
-            gp.set_parameter_vector(p)
-            return -gp.grad_lnlikelihood(y, quiet=True)
-    
+            self.gp.set_parameter_vector(p)
+            return -self.gp.grad_lnlikelihood(self.y, quiet=True)
+
         # Run optimization routine
-        p0 = gp.get_parameter_vector()
+        p0 = self.gp.get_parameter_vector()
         results = op.minimize(nll,p0, jac=grad_nll, method="BFGS")
 
         # Update kernel
-        gp.set_parameter_vector(results.x)
+        self.gp.set_parameter_vector(results.x)
 
-        # Interpolate to daily precision
-        x_predict = np.linspace(min(x), max(x), 13871)
-        mu, var = gp.predict(y, x_predict, return_var=True)
+        # Call Model.run_MCMC
+        super().run_MCMC(self.gp.get_parameter_vector(), nwalkers, nsteps)
 
-        # Plot result
-        plt.fill_between(x_predict, mu-np.sqrt(var), mu+np.sqrt(var), color="k", alpha=0.2)
-        plt.errorbar(x, y, yerr=yerr, fmt=".k", capsize=0)
 
-        return x_predict, mu, np.sqrt(var)
+    def __call__(self, x_in):
+        """
+        Returns x, y, and yerr from GPR evaluated at x_in  
+        """
+
+        self.x_predict = self.x_predict.astype(np.float64)
+        x_in = x_in.astype(np.float64)
+
+        # Explicitly declare min/max to avoid binary conversion rounding error 
+        x_in_min = np.min(self.x_predict.astype(np.float32))
+        x_in_max = np.max(self.x_predict.astype(np.float32))
+        wh_x_in = np.where((x_in.astype(np.float32) >= x_in_min) & (x_in.astype(np.float32) <= x_in_max))
+        x_in_sub = x_in[wh_x_in]
+
+        x_out_min = np.min(x_in_sub.astype(np.float32))
+        x_out_max = np.max(x_in_sub.astype(np.float32))
+        wh_x_out = np.where((self.x_predict.astype(np.float32) >= x_out_min) & (self.x_predict.astype(np.float32) <= x_out_max))
+        x_out = self.x_predict[wh_x_out]
+
+        # Downsample
+        x_out = x_out[::self.subdivisions]
+        y_out = self.y_predict[wh_x_out][::self.subdivisions]
+        yerr_out = self.yerr_predict[wh_x_out][::self.subdivisions]
+
+        return x_out, y_out, yerr_out
+
 
     def log_lh(self, params):
         """
-        Computes log of Gaussian likelihood function
-
+        Computes log likelihood for GPR using GP.lnlikelihood
         Args:
-            params (array): Parameters for the simple climate model,
-            contain subset (in order) of the following parameters:
-                -alpha: proportionality constant
-                -dt: time delay for cooling to take effect
-
-        Returns:
-            chisq: Sum of ((y_data - y_model)/y_err)**2 
+            params (array): Parameters on which to compute log likelihood
         """
 
-        if isinstance(params, tuple):
-            alpha, dt = params[0]
-        else:
-            alpha, dt = params
+        # Update the kernel parameters and compute log-likelihood
+        self.gp.set_parameter_vector(params)
+        return self.gp.lnlikelihood(self.y, quiet=True)
 
-        # Make dt in years with daily precision
-        dt = int(dt*365)
-        dt = float(dt)/365         
-        
-        if(dt>=1. or dt<=-1.):
-            return -np.inf
- 
-        # Evaluate model at given point
-        x_model, y_model = self.__call__(params)
 
-        # Select years from data and seeding model to compare
-        wh_data = np.where((self.x >= np.min(self.solar_x) + dt)
-                         & (self.x <= np.max(self.solar_x) + dt))
-        wh_model = np.where((self.solar_x <= np.max(self.x) - dt)
-                         & (self.solar_x >= np.min(self.x) - dt))
-       
-        y_data = self.y[wh_data]
-        x_data = self.x[wh_data]
-        yerr_data = self.yerr[wh_data]
-        yerr_model = self.solar_yerr[wh_model]
+    def show_results(self, burnin):
+        """
+        Displays results from interpolative prediction
+    
+        Args:
+            burnin (int): Burn in time to trim the samples
+        """
         
-        # Take yearly values to compare to data
-        yerr_model = yerr_model[::365]
-        if (dt>0):
-            yerr_model = yerr_model[:-1]
-        if (dt<0):
-            yerr_model = yerr_model[1:] 
+        # Modify self.samples for burn-in
+        self.samples = self.sampler.chain[:, burnin:, :].reshape((-1, self.ndim))
+
+        # Compute sample size 
+        n_samples = np.minimum(200, self.samples.shape[0] - burnin*self.ndim)
+
+        # Create array to save prediction values
+        y_predict = np.zeros((n_samples*2, len(self.x_predict)))
+
+        # Plot data
+        plt.figure(figsize=(14,8))
+        plt.errorbar(self.x, self.y, self.yerr,  linestyle='none')
+        plt.scatter(self.x, self.y, c='k',zorder=5,s=20, label='Data')
+        
+        # Progress bar
+        print('Progress: ')
+        width = 100
+
+        # Plot samples from GPR
+        for i in range(n_samples):
+            # Get random parameter sample
+            r = np.random.randint(self.samples.shape[0])
+            self.gp.set_parameter_vector(self.samples[r])
+
+            # Get 2 predictions per sample: upper and lower bound
+            y_predict[i,:], var = self.gp.predict(self.y, self.x_predict, return_var=True)
+            y_predict[i+n_samples,:] = y_predict[i,:] + np.sqrt(np.abs(var))
+            y_predict[i,:] = y_predict[i,:] -  np.sqrt(np.abs(var))
             
-        #print("dt: ", dt)
-        #print("Solar year data bounded by : ", np.min(self.x)-dt , np.max(self.x)-dt)
-        #print("Temp year data bounded by : ", np.min(self.solar_x)+dt , np.max(self.solar_x)+dt)
-        #print(x_model)
-        #print(x_data)
+            # Update progress bar   
+            n = int((width+1) * float(i) / n_samples)         
+            print("\r[{0}{1}]".format('#' * n, ' ' * (width - n)), end='')
 
-        # Compute chisq and return
-        chisq = np.sum( (y_data - y_model)**2 / (yerr_data**2 + alpha**2*yerr_model**2) )
-        constant = np.sum(np.log(1 / np.sqrt(2.0 * np.pi * (yerr_data**2 + alpha**2*yerr_model**2)) )) 
-        return constant - 0.5*chisq
+            # Plot 10 samples
+            if i < 10:
+                plt.plot(self.x_predict, y_predict[i,:], "b", alpha=0.1)
+                plt.plot(self.x_predict, y_predict[i+n_samples,:], "b", alpha=0.1)
+
+        print(os.linesep)
+
+        plt.xlabel('X', fontsize=20)
+        plt.ylabel('Y', fontsize=20)
+        plt.xlim([np.max([self.x[0], self.x_predict[0]]),
+                  np.min([self.x[-1], self.x_predict[-1]])])
+        plt.title('Samples of GPR MCMC Fit to Data', fontsize=20);
+        plt.show()
+
+        # Compute point estimate for prediction and error
+        self.y_predict = np.average(y_predict, axis=0)
+        self.yerr_predict = np.sqrt(np.var(y_predict, axis=0))
+
+
+    def get_parameters(self):
+        """
+        Getter for the GPR parameters.
+        """
+
+        return self.gp.get_parameter_vector()
 
     
 
@@ -758,170 +747,3 @@ class CombinedModel(Model):
         chisq = np.sum(((y_data - y_model)/yerr_data)**2)
         constant = np.sum(np.log(1/np.sqrt(2.0*np.pi*yerr_data**2)))
         return constant - 0.5*chisq
-        
-
-class GPRInterpolator(Model):
-    """
-    Gaussian Process Regression for interpolating a data set with variable factor increase
-    in domain resolution
-    """
-
-    def __init__(self, x, y, yerr, subdivisions):
-        """
-        Initialize global variables of Gaussian Process Regression Interpolator
-    
-        Args:
-            x (array): Independent variable
-            y (array): Dependent variable
-            yerr (array): Uncertainty on y
-            subdivisions: The number of subdivisions between data points
-        """
-
-        # Define kernels
-        kernel_expsq = 38**2 * kernels.ExpSquaredKernel(metric=10**2)
-        kernel_periodic = 150**2 * kernels.ExpSquaredKernel(2**2) * kernels.ExpSine2Kernel(gamma=0.05, log_period=np.log(11))
-        kernel_poly = 5**2 * kernels.RationalQuadraticKernel(log_alpha=np.log(.78), metric=1.2**2)
-        kernel_extra = 5**2 * kernels.ExpSquaredKernel(1.6**2)
-        kernel = kernel_expsq + kernel_periodic + kernel_poly + kernel_extra
-
-        # Create GP object
-        self.gp = george.GP(kernel, mean=np.mean(y), fit_mean=True)
-        self.gp.compute(x, yerr)
-    
-        # Set global variables
-        self.ndim = len(self.gp)
-        print(self.ndim)
-        self.x = x
-        self.y = y
-        self.yerr = yerr
-        self.subdivisions = subdivisions
-        self.priors = [ prior.Prior(0,1) for i in range(self.ndim) ] 
-        self.x_predict = np.linspace(min(self.x), max(self.x), subdivisions*(len(self.x)-1) + 1 )   
-
-
-    def run_MCMC(self, nwalkers, nsteps):
-        """
-        Samples the posterior distribution via the affine-invariant ensemble 
-        sampling algorithm; plots are output to diagnose burn-in time; best-fit
-        parameters are printed; best-fit line is overplotted on data, with errors.
-    
-        Args:
-            nwalkers (int): Number of walkers for affine-invariant ensemble sampling;
-                            must be an even number
-            nsteps (int): Number of timesteps for which to run the algorithm
-
-
-        Returns:
-            Samples (array): Trajectories of the walkers through parameter spaces.
-                             This array has dimension (nwalkers) x (nsteps) x (ndim)
-        """
-
-        # Define objective function to optimize (log-likelihood)
-        def nll(p):
-            self.gp.set_parameter_vector(p)
-            ll = self.gp.lnlikelihood(self.y, quiet=True)
-            return -ll if np.isfinite(ll) else 1e25
-
-        # Define gradient of objective function
-        def grad_nll(p):
-            self.gp.set_parameter_vector(p)
-            return -self.gp.grad_lnlikelihood(self.y, quiet=True)
-
-        # Run optimization routine
-        p0 = self.gp.get_parameter_vector()
-        results = op.minimize(nll,p0, jac=grad_nll, method="BFGS")
-
-        # Update kernel
-        self.gp.set_parameter_vector(results.x)
-
-        # Call Model.run_MCMC
-        super().run_MCMC(self.gp.get_parameter_vector(), nwalkers, nsteps)        
-
-    def __call__(self, x_in):
-        """
-        Returns x, y, and yerr from GPR evaluated at x_in  
-        """
-        
-        # Explicitly declare min/max to avoid binary conversion rounding error 
-        x_in_min = np.min(self.x_predict.astype(np.float32))
-        x_in_max = np.max(self.x_predict.astype(np.float32))
-        wh_x_in = np.where((x_in.astype(np.float32) >= x_in_min) & (x_in.astype(np.float32) <= x_in_max))
-        x_in_sub = x_in[wh_x_in]
-
-        x_out_min = np.min(x_in_sub.astype(np.float32))
-        x_out_max = np.max(x_in_sub.astype(np.float32))
-        wh_x_out = np.where((self.x_predict.astype(np.float32) >= x_out_min) & (self.x_predict.astype(np.float32) <= x_out_max))
-        x_out = self.x_predict[wh_x_out]
-        
-        # Downsample
-        x_out = x_out[::self.subdivisions]
-        y_out = self.y_predict[::self.subdivisions]
-        yerr_out = self.yerr_predict[::self.subdivisions]
-
-        return x_out, y_out, yerr_out
-
-
-    def log_lh(self, params):
-        """
-        Computes log likelihood for GPR using GP.lnlikelihood
-        Args:
-            params (array): Parameters on which to compute log likelihood
-        """
-   
-        # Update the kernel parameters and compute log-likelihood
-        self.gp.set_parameter_vector(params) 
-        return self.gp.lnlikelihood(self.y, quiet=True)
-
-    
-    def show_results(self, burnin):
-        """
-        Displays results from interpolative prediction
-    
-        Args:
-            burnin (int): Burn in time to trim the samples
-        """
-
-        # Compute sample size 
-        n_samples = 200
-
-        # Create array to save prediction values
-        y_predict = np.zeros((n_samples*2, len(self.x_predict)))
-
-        # Plot data
-        plt.figure(figsize=(14,8))
-        plt.errorbar(self.x, self.y, self.yerr,  linestyle='none')
-        plt.scatter(self.x, self.y, c='k',zorder=5,s=20, label='Data')
-       
-        # Plot samples from GPR
-        for i in range(n_samples):
-            # Get random parameter sample
-            r = np.random.randint(self.samples.shape[0])
-            self.gp.set_parameter_vector(self.samples[r])
-
-            # Get 2 predictions per sample: upper and lower bound
-            y_predict[i,:], var = self.gp.predict(self.y, self.x_predict, return_var=True)
-            y_predict[i+n_samples,:] = y_predict[i,:] + np.sqrt(np.abs(var))
-            y_predict[i,:] = y_predict[i,:] -  np.sqrt(np.abs(var))
-
-            # Plot the random sample    
-            plt.plot(self.x_predict, y_predict[i,:], "b", alpha=0.1)
-            plt.plot(self.x_predict, y_predict[i+n_samples,:], "b", alpha=0.1)
-       
-        # Compute point estimate for prediction and error
-        self.y_predict = np.average(y_predict, axis=0)
-        self.yerr_predict = np.sqrt(np.var(y_predict, axis=0))
-        
-        # Plot point estimate for prediction and error
-        plt.errorbar(self.x_predict, self.y_predict, self.yerr_predict,  linestyle='none')
-        plt.scatter(self.x_predict, self.y_predict, c='r',zorder=5,s=10, label='GPR Prediction')
-
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.xlim([np.max([self.x[0], self.x_predict[0]]),
-                  np.min([self.x[-1], self.x_predict[-1]])])
-        plt.title('Model Fit to Data');
-        plt.legend()
-        plt.show()
-
-
-        

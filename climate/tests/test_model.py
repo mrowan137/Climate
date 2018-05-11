@@ -1,15 +1,21 @@
 from climate.inference import model
 from climate.data_io import *
-
 import pandas as  pd
 import numpy.random as random
 import unittest
 from unittest import TestCase
 
 
-
 class TestModel(TestCase):
+    """
+    TestModel class with TestCase as base class. Used for testing models in model.py
+    """
+
     def test_ModifiedSimpleClimateModel(self):
+        """
+        Test function for the ModifiedSimpleClimateModel class
+        """
+    
         # Load emissions data
         fileload = get_example_data_file_path('EmissionsForSCM.dat', data_dir='pySCM')
         ems = load_data_emissions(fileload)
@@ -70,6 +76,10 @@ class TestModel(TestCase):
 
 
     def test_BasicCloudSeedingModel(self):
+        """
+        Test function for the BasicCloudSeedingModel class
+        """
+
         data = load_data_temp(get_example_data_file_path(
             'global_surface_temp_seaice_air_infer.txt'))
         x, y, yerr = data['year'], data['monthly_anomaly'], data['monthly_anomaly_unc']
@@ -90,8 +100,8 @@ class TestModel(TestCase):
         sunspots_unc = data_sunspots['stdev'].values[118::]
         
         # Generate dataset from model of known parameters
-        # Create instance of ModifiedSimpleClimateModel
-        CSM_generate = model.BasicCloudSeedingModel(x, y, yerr, years_sunspots, sunspots, sunspots_unc)
+        # Create instance of ModifiedSimpleClimateModel with no interpolation
+        CSM_generate = model.BasicCloudSeedingModel(x, y, yerr, years_sunspots, sunspots, sunspots_unc,1)
 
         # Set priors
         prior_type = ['uniform' for i in range(2) ]
@@ -109,7 +119,7 @@ class TestModel(TestCase):
 
         
         # Create new model and fit it to the dataset        
-        CSM_test = model.BasicCloudSeedingModel(x_generated, y_generated, yerr_generated, years_sunspots, sunspots, sunspots_unc)
+        CSM_test = model.BasicCloudSeedingModel(x_generated, y_generated, yerr_generated, years_sunspots, sunspots, sunspots_unc, 1)
 
         # Set priors
         prior_type = ['uniform' for i in range(2) ]
@@ -124,6 +134,55 @@ class TestModel(TestCase):
 
         print('Check that parameter result is consisitent with 0.35, 1.0') 
     
+
+    def test_GPRInterpolator(self):
+        """
+        Test function for the GPRInterpolator class
+        """
+
+        # Get solar data
+        fileload = get_example_data_file_path(
+            'SN_y_tot_V2.0.txt', data_dir='data/sunspots')
+        data_sunspots = load_data_y_sunspot(fileload)
+
+        # Get np.arrays for data series
+        years_sunspots = np.floor(data_sunspots['year'].values[118::])
+        sunspots = data_sunspots['yearly_sunspot_number'].values[118::]
+        sunspots_unc = data_sunspots['stdev'].values[118::]
+
+        # Generate dataset from model of known parameters
+        # Create instance of ModifiedSimpleClimateModel
+        GPR_generate = model.GPRInterpolator(years_sunspots, sunspots, sunspots_unc, 5)
+
+        # Set priors
+        prior_type = ['uniform' for i in range(12) ]
+        prior_param1 = [-100 for i in range(12) ]
+        prior_param2 = [ 100 for i in range(12) ]
+        GPR_generate.set_priors(prior_type, prior_param1, prior_param2)
+
+        # Generate dataset
+        GPR_generate.run_MCMC(nwalkers=24, nsteps=400)
+        GPR_generate.show_results(100)
+
+        x_generated, y_generated, yerr_generated = GPR_generate(years_sunspots)
+
+        # Create new model and fit it to the dataset        
+        GPR_test = model.GPRInterpolator(x_generated, y_generated, yerr_generated, 1)
+
+        # Set priors
+        params = GPR_generate.get_parameters()
+        prior_type = ['uniform' for i in range(12) ]
+        prior_param1 = params*.5
+        prior_param2 = params*1.5
+        GPR_test.set_priors(prior_type, prior_param1, prior_param2)
+
+
+        # Run MCMC with initial guess far from true value
+        GPR_test.run_MCMC(nwalkers=24, nsteps=400)
+        GPR_test.show_results(burnin=100)
+
+        print('Check that parameter result is consisitent with', params)
+
 
 if __name__ == '__main__':
     unittest.main()
