@@ -236,6 +236,14 @@ class Model:
 
         self.bestfit_params = params
 
+    
+    def get_parameters(self):
+        """
+        Getter for model parameters
+        """
+
+        return self.bestfit_params
+
 
 
 class ModifiedSimpleClimateModel(Model):
@@ -630,6 +638,23 @@ class GPRInterpolator(Model):
         # Compute point estimate for prediction and error
         self.y_predict = np.average(y_predict, axis=0)
         self.yerr_predict = np.sqrt(np.var(y_predict, axis=0))
+    
+
+    def print_parameters(self):
+        """
+        Prints point estimates for hyperparameters
+        """
+
+        # Store the samples in a dataframe
+        index = [i for i in range(len(self.samples[:,0]))]
+        columns = ['p'+str(i) for i in range(self.ndim)]
+        samples_df = pd.DataFrame(self.samples, index=index, columns=columns)
+
+        # Compute and print the MAP values
+        q = samples_df.quantile([0.16, 0.50, 0.84], axis=0)
+        for i in range(self.ndim):
+            print("Param {:.0f} = {:.6f} + {:.6f} - {:.6f}".format( i,
+            q['p'+str(i)][0.50], q['p'+str(i)][0.84] - q['p'+str(i)][0.50], q['p'+str(i)][0.50] - q['p'+str(i)][0.16]))
 
 
     def get_parameters(self):

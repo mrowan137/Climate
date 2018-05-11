@@ -69,7 +69,7 @@ class TestModel(TestCase):
                        +[el for el in ems['CH4']]
                        +[el for el in ems['SOx']])
         SCM_test.run_MCMC( param_guess=[0.3],
-                           nwalkers=2*SCM_test.ndim, nsteps=500)
+                           nwalkers=2*SCM_test.ndim, nsteps=10)
         SCM_test.show_results(burnin=1,params_to_plot=[0])
         
         print('Check that parameter result is consisitent with 0.0 shift')
@@ -176,12 +176,15 @@ class TestModel(TestCase):
         prior_param2 = params*1.5
         GPR_test.set_priors(prior_type, prior_param1, prior_param2)
 
+        print('Gauge fitting of the GPR by how well the function fits the data. Individual parameters can be more volitile')
 
         # Run MCMC with initial guess far from true value
         GPR_test.run_MCMC(nwalkers=24, nsteps=400)
         GPR_test.show_results(burnin=100)
 
         print('Check that parameter result is consisitent with', params)
+
+        GPR_test.print_parameters()
 
 
 if __name__ == '__main__':
