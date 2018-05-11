@@ -69,7 +69,7 @@ class TestModel(TestCase):
                        +[el for el in ems['CH4']]
                        +[el for el in ems['SOx']])
         SCM_test.run_MCMC( param_guess=[0.3],
-                           nwalkers=2*SCM_test.ndim, nsteps=500
+                           nwalkers=2*SCM_test.ndim, nsteps=500)
         SCM_test.show_results(burnin=1,params_to_plot=[0])
         
         print('Check that parameter result is consisitent with 0.0 shift')
