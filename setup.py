@@ -12,11 +12,11 @@ setup(name='climate',
 
       description='A package for Physics 201 term project on climate',
 
-      url='http://github.com/phys201/climate',
+      url='http://github.com/mrowan137/climate',
 
-      author='lyu201',
+      author='mrowan137',
 
-      author_email='lyu201@users.noreply.github.com',
+      author_email='mrowan137@gmail.com',
 
       license='GPLv3',
 
