@@ -17,9 +17,9 @@ can install with one of the following commands:
 
    - [Linux] sudo apt-get install gfortran
 
-or for Mac, if `Homebrew` is installed,
+or for Mac, if `Homebrew` is installed, it can be installed as part of gcc:
 
-   - [Mac OS X] brew install
+   - [Mac OS X] brew install gcc
 
 
 Installation
